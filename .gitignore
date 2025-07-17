@@ -1,3 +1,38 @@
+# File compilati
+/bin/
+/target/
+/build/
+
+# File di configurazione dell'IDE
+/.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
 .vscode/
-dist/
-bin/
+
+# File temporanei
+*.log
+*.tmp
+*.bak
+*.swp
+*~.nib
+
+# Altri file
+.DS_Store
+Thumbs.db
+
+# File di pacchetto
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# File di log
+*.log
+
+# File di configurazione locali
+*.properties
