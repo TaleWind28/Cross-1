@@ -4,8 +4,8 @@ public class StopOrder extends Order{
 
     private int stopPrice;
 
-    public StopOrder (int orderID, String username, String type, String orderType, int size, int stopPrice) {
-        super(orderID, username, type, orderType, size);
+    public StopOrder (int orderID, String username, String type, int size, int stopPrice) {
+        super(orderID, username, type, size);
         this.stopPrice = stopPrice;
     }
 

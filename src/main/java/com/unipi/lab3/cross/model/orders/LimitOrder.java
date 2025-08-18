@@ -4,8 +4,8 @@ public class LimitOrder extends Order {
 
     private int limitPrice;
 
-    public LimitOrder (int orderID, String username, String type, String orderType, int size, int limitPrice) {
-        super(orderID, username, type, orderType, size);
+    public LimitOrder (int orderID, String username, String type, int size, int limitPrice) {
+        super(orderID, username, type, size);
         this.limitPrice = limitPrice;
     }
 

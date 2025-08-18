@@ -11,19 +11,16 @@ public class Order {
 
     private String type; // ask o bid
 
-    private String orderType; // is it really needed?
-
     private int size;
 
     // date can be useful?
 
     // what else?
 
-    public Order (int orderID, String username, String type, String orderType, int size) {
+    public Order (int orderID, String username, String type, int size) {
         this.orderID = orderID;
         this.username = username;
         this.type = type;
-        this.orderType = orderType;
         this.size = size;
     }
 
@@ -37,10 +34,6 @@ public class Order {
 
     public String getType () {
         return this.type;
-    }
-
-    public String getOrderType () {
-        return this.orderType;
     }
 
     public int getSize () {
