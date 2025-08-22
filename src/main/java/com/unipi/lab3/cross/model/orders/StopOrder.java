@@ -13,4 +13,8 @@ public class StopOrder extends Order{
         return stopPrice;
     }
 
+    public String toString () {
+        return "Order ID: " + this.getOrderId() + " Username: " + this.getUsername() + " Type: " + this.getType() + " Size: " + this.getSize() + " Stop Price: " + this.getStopPrice();
+    }
+
 }

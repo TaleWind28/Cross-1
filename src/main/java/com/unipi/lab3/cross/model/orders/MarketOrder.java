@@ -6,4 +6,7 @@ public class MarketOrder extends Order{
         super(orderID, username, type, size);
     }
     
+    public String toString () {
+        return "Order ID: " + this.getOrderId() + " Username: " + this.getUsername() + " Type: " + this.getType() + " Size: " + this.getSize() + " Market Order";
+    }
 }

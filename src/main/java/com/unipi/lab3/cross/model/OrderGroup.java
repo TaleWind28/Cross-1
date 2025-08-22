@@ -27,6 +27,12 @@ public class OrderGroup {
         this.limitOrders = limitOrders;
     }
 
+    public OrderGroup () {
+        this.size = 0;
+        this.total = 0;
+        this.limitOrders = new ConcurrentLinkedQueue<>();
+    }
+
     public int getSize () {
         return this.size;
     }
@@ -51,6 +57,24 @@ public class OrderGroup {
         return this.limitOrders.isEmpty();
     }
 
+    public void updateGroup (int filledSize, int limitPrice) {
+        this.size -= filledSize;
+        this.total = limitPrice * this.size;
+    }
+
+    public int getFilteredSize (String excludedUsername) {
+        int filteredSize = this.size;
+
+        for (LimitOrder order : this.limitOrders) {
+            if (order.getUsername().equals(excludedUsername)) {
+                // if the order is from the user, subtract its size from the total size
+                filteredSize -= order.getSize();
+            }
+        }
+
+        return filteredSize;
+    }
+
     // add a limit order to the queue
     public void addOrder (LimitOrder order) {
         // add the new order to the existing queue
@@ -61,7 +85,7 @@ public class OrderGroup {
 
         // update total of the group
         int newTotal = order.getLimitPrice() * this.size;
-        setTotal(newTotal);
+        this.total = newTotal;
     }
 
     public boolean removeOrder (int orderId, String username) {
@@ -91,5 +115,13 @@ public class OrderGroup {
 
         // order not found or not removed
         return false;
+    }
+
+    public void printGroup () {
+        System.out.println("Size: " + this.size + " Total: " + this.total);
+        System.out.println("Orders:");
+        for (LimitOrder order : this.limitOrders) {
+            System.out.println(order.toString());
+        }
     }
 }

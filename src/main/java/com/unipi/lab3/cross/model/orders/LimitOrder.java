@@ -11,5 +11,9 @@ public class LimitOrder extends Order {
 
     public int getLimitPrice () {
         return limitPrice;
-    }    
+    }
+
+    public String toString () {
+        return "Order ID: " + this.getOrderId() + " Username: " + this.getUsername() + " Type: " + this.getType() + " Size: " + this.getSize() + " Limit Price: " + this.getLimitPrice();
+    }
 }
