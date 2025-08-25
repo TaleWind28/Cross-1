@@ -1,4 +1,4 @@
-package com.unipi.lab3.cross.model;
+package com.unipi.lab3.cross.model.user;
 
 /**
  * class representing a user in the system
@@ -7,12 +7,12 @@ package com.unipi.lab3.cross.model;
 
 public class User {
     private String username;
-    private String password;
+    private String passwordHash;
     private boolean isLogged;
 
-    public User (String username, String password, boolean isLogged) {
+    public User (String username, String passwordHash, boolean isLogged) {
         this.username = username;
-        this.password = password;
+        this.passwordHash = passwordHash;
         this.isLogged = isLogged;
     }
 
@@ -21,15 +21,15 @@ public class User {
     }
 
     public String getPassword () {
-        return this.password;
+        return this.passwordHash;
     }
 
     public boolean getLogged () {
         return this.isLogged;
     }
 
-    public void setPassword (String password) {
-        this.password = password;
+    public void setPassword (String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public void setLogged (boolean isLogged) {

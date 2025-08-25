@@ -1,0 +1,138 @@
+package com.unipi.lab3.cross.model.user;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+public class UserManager {
+
+    // user map
+    private ConcurrentHashMap<String, User> users;
+
+    public UserManager () {
+        this.users = new ConcurrentHashMap<>();
+    }
+
+    public UserManager (ConcurrentHashMap<String, User> users) {
+        this.users = users;
+    }
+
+    public Map<String, User> getUsers () {
+        return this.users;
+    }
+
+    public User getUser (String username) {
+        return this.users.get(username);
+    }
+
+    // register
+    public int register (String username, String password) {
+
+        if (!isValid(password, 8, 20))
+            return 101;
+
+        if (!isValid(username, 3, 12))
+            return 103;
+        
+        String hashedPassword = hashPassword(password);
+        User user = new User(username, hashedPassword, false);
+
+        if (this.users.putIfAbsent(username, user) != null)
+            return 102;
+
+        return 100;
+    }
+
+    public int updateCredentials (String username, String newPwd, String oldPwd) {
+
+        User user = this.users.get(username);
+
+        if (user == null)
+            return 105;
+
+        String currentPwd = user.getPassword();
+
+        if (!hashPassword(oldPwd).equals(currentPwd))
+            return 102;
+
+        if (newPwd.equals(oldPwd))
+            return 103;
+
+        if (!isValid(newPwd, 8, 20))
+            return 101;
+
+        String newHashedPwd = hashPassword(newPwd);
+        user.setPassword(newHashedPwd);
+
+        return 100;
+    }
+
+    public int login (String username, String password) {
+
+        if (!isValid(password, 8, 20))
+            return 103;
+
+        User user = this.users.get(username);
+
+        if (user == null)
+            return 103;
+        
+        String currentPwd = user.getPassword();
+
+        if (!hashPassword(password).equals(currentPwd))
+            return 101;
+
+        user.setLogged(true);
+
+        return 100;
+    }
+
+    public int logout (String username) {
+
+        User user = this.users.get(username);
+
+        if (user == null)
+            return 101;
+
+        user.setLogged(false);
+
+        return 100;
+    }  
+    
+    // password hashed
+    private String hashPassword(String password) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+
+            byte[] digest = md.digest(password.getBytes(StandardCharsets.UTF_8));
+
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+
+            return sb.toString();
+        } 
+        catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private boolean isValid (String str, int minLen, int maxLen) {
+        if (str == null || str.isEmpty())
+            return false;
+
+        if (str.length() < minLen || str.length() > maxLen)
+            return false;
+
+        for (char c : str.toCharArray()) {
+            if (!Character.isLetterOrDigit(c))
+                return false;
+        }
+
+        return true;
+    }
+}
