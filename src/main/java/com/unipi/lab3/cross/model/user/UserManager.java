@@ -30,17 +30,20 @@ public class UserManager {
     // register
     public int register (String username, String password) {
 
+        // invalid password
         if (!isValid(password, 8, 20))
             return 101;
 
+        // invalid username
         if (!isValid(username, 3, 12))
             return 103;
         
         String hashedPassword = hashPassword(password);
         User user = new User(username, hashedPassword, false);
 
+        // add user if not already exists
         if (this.users.putIfAbsent(username, user) != null)
-            return 102;
+            return 102; // username not available
 
         return 100;
     }
@@ -49,41 +52,53 @@ public class UserManager {
 
         User user = this.users.get(username);
 
+        // user not found
         if (user == null)
             return 105;
 
         String currentPwd = user.getPassword();
 
+        // old password mismatch
         if (!hashPassword(oldPwd).equals(currentPwd))
             return 102;
 
+        // new password equal to old one
         if (newPwd.equals(oldPwd))
             return 103;
 
+        // invalid new password
         if (!isValid(newPwd, 8, 20))
             return 101;
 
         String newHashedPwd = hashPassword(newPwd);
-        user.setPassword(newHashedPwd);
+        
+        User newUser = new User(username, newHashedPwd, false);
+        
+        if (!this.users.replace(username, user, newUser))
+            return 105;
 
         return 100;
     }
 
     public int login (String username, String password) {
 
+        // invalid password ??
         if (!isValid(password, 8, 20))
             return 103;
 
         User user = this.users.get(username);
 
+        // user not found
         if (user == null)
             return 103;
         
         String currentPwd = user.getPassword();
 
+        // password mismatch
         if (!hashPassword(password).equals(currentPwd))
             return 101;
 
+        // set logged state
         user.setLogged(true);
 
         return 100;
@@ -93,9 +108,11 @@ public class UserManager {
 
         User user = this.users.get(username);
 
+        // user not found
         if (user == null)
             return 101;
 
+        // unset logged state
         user.setLogged(false);
 
         return 100;
