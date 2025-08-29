@@ -2,149 +2,86 @@ package com.unipi.lab3.cross.main;
 
 import com.unipi.lab3.cross.model.*;
 import com.unipi.lab3.cross.model.orders.*;
+import com.unipi.lab3.cross.server.*;
 
+import java.io.*;
+import java.net.*;
+import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Comparator;
 
 public class ServerMain {
-    public static void main(String[] args) {
 
-        // orders
-        /*LimitOrder lo1 = new LimitOrder(1, "mario", "ask", 50, 100);
+    public static final String configFile = "server.properties";
+    public static int tcpPort;
+    public static int udpPort;
 
-        LimitOrder lo2 = new LimitOrder(2, "luigi", "ask", 30, 100);
+    public static int inactivityTimeout;
 
-        LimitOrder lo3 = new LimitOrder(3, "peach", "ask", 20, 90);
+    public static ServerSocket serverSocket;
 
-        LimitOrder lo4 = new LimitOrder(4, "yoshi", "bid", 40, 80);
+    //threadpool
+    public static final ExecutorService pool = Executors.newCachedThreadPool();
 
-        LimitOrder lo5 = new LimitOrder(5, "toad", "bid", 60, 80);
+    public static void main(String[] args) throws Exception{
 
-        LimitOrder lo6 = new LimitOrder(6, "mario", "bid", 10, 70);
-
-        OrderGroup og1 = new OrderGroup();
-
-        og1.addOrder(lo1);
-        og1.addOrder(lo2);
-
-        OrderGroup og2 = new OrderGroup();
-        og2.addOrder(lo3);
-
-        OrderGroup og3 = new OrderGroup();
-        og3.addOrder(lo4);
-        og3.addOrder(lo5);
-
-        OrderGroup og4 = new OrderGroup();
-        og4.addOrder(lo6);
-
-        ConcurrentSkipListMap<Integer, OrderGroup> askOrders = new ConcurrentSkipListMap<>();
-        askOrders.put(100, og1);
-        askOrders.put(90, og2);
-
-        ConcurrentSkipListMap<Integer, OrderGroup> bidOrders = new ConcurrentSkipListMap<>(Comparator.reverseOrder());
-        bidOrders.put(80, og3);
-        bidOrders.put(70, og4);
+        readConfig();
 
 
-        OrderBook orderBook = new OrderBook(askOrders, bidOrders, 0, 0, 0);
+        // upload orderbook, users from file ? how to do it ?
 
-        orderBook.addLimitOrder(7, "mario", "ask", 70, 90);
+        // OrderBook orderBook = new OrderBook();
+        // UserManager userManager = new UserManager();
+        // mettere anche variabili per le varie liste
 
-        System.out.println("order Book:");
+        // UdpNotifier udpNotifier = new UdpNotifier();
 
-        orderBook.printOrderBook();
+        // TCP socket
+        try {
 
-        System.out.println("best ask: " + orderBook.getBestAskPrice());
-        System.out.println("best bid: " + orderBook.getBestBidPrice());        
+            serverSocket = new ServerSocket(tcpPort);
 
-        System.out.println("executing limit order: luigi, bid, size 50, limit price 95");
+            // inactivity handler thread
+            // Runtime ...
 
-        orderBook.execLimitOrder("luigi", 120, 95, "bid");
+            // listening server for client connections
+            while (true) {
+                try { 
+                    
+                    Socket clientSocket = serverSocket.accept();
 
+                    ClientHandler handler = new ClientHandler(clientSocket, null);
 
-        System.out.println("order Book after bid order:");
+                    pool.execute(handler);
 
-        orderBook.printOrderBook();
+                }
+                catch (SocketException se) {
+                    break;
+                }
+                catch (IOException e) {
+                    System.err.println(e.getMessage());
+                }
 
-        System.out.println("best ask: " + orderBook.getBestAskPrice());
-        System.out.println("best bid: " + orderBook.getBestBidPrice());
+            }
+        }
+        catch (Exception e) {
+            System.err.println(e.getMessage());
+        }
+    }
 
-        // stop orders execution
+    public static void readConfig () throws FileNotFoundException, IOException {
+        Properties props = new Properties();
 
-        orderBook.addStopOrder("mario", 40, 30, "ask");
-        orderBook.addStopOrder("peach", 30, 70, "bid");
-        orderBook.addStopOrder("yoshi", 20, 90, "ask");
-        orderBook.addStopOrder("toad", 10, 60, "bid");
+        FileInputStream inputFile = new FileInputStream(configFile);
+        props.load(inputFile);
 
-        orderBook.getStopAsks().forEach(stopOrder -> {
-            System.out.println("stop ask order - ID: " + stopOrder.getOrderId() + ", Username: " + stopOrder.getUsername() + ", Size: " + stopOrder.getSize() + ", Stop Price: " + stopOrder.getStopPrice());
-        });
-        orderBook.getStopBids().forEach(stopOrder -> {
-            System.out.println("stop bid order - ID: " + stopOrder.getOrderId() + ", Username: " + stopOrder.getUsername() + ", Size: " + stopOrder.getSize() + ", Stop Price: " + stopOrder.getStopPrice());
-        });
+        tcpPort = Integer.parseInt(props.getProperty("tcpPort"));
+        udpPort = Integer.parseInt(props.getProperty("udpPort"));
+        inactivityTimeout = Integer.parseInt(props.getProperty("timeout"));
+        // other properties ...
 
-        orderBook.execStopOrders();
-
-        System.out.println("order book after stop orders:");
-
-        orderBook.printOrderBook();
-
-        System.out.println("best ask: " + orderBook.getBestAskPrice());
-        System.out.println("best bid: " + orderBook.getBestBidPrice());
-
-        orderBook.getStopAsks().forEach(stopOrder -> {
-            System.out.println("stop ask order - ID: " + stopOrder.getOrderId() + ", Username: " + stopOrder.getUsername() + ", Size: " + stopOrder.getSize() + ", Stop Price: " + stopOrder.getStopPrice());
-        });
-        orderBook.getStopBids().forEach(stopOrder -> {
-            System.out.println("stop bid order - ID: " + stopOrder.getOrderId() + ", Username: " + stopOrder.getUsername() + ", Size: " + stopOrder.getSize() + ", Stop Price: " + stopOrder.getStopPrice());
-        });
-
-        // market orders execution
-
-        orderBook.execMarketOrder(150, "ask", "market", "costi", 0);
-
-
-        System.out.println("order book after market order:");
-        orderBook.printOrderBook();
-        System.out.println("best ask: " + orderBook.getBestAskPrice());
-        System.out.println("best bid: " + orderBook.getBestBidPrice());*/
-        
-
-        // self trading case -> negative spread ???
-
-        /*LimitOrder lo1 = new LimitOrder(1, "mario", "ask", 50, 100);
-
-        LimitOrder lo2 = new LimitOrder(2, "mario", "bid", 30, 90);
-
-        OrderGroup og1 = new OrderGroup();
-        og1.addOrder(lo1);
-
-        OrderGroup og2 = new OrderGroup();
-        og2.addOrder(lo2);
-
-        ConcurrentSkipListMap<Integer, OrderGroup> askOrders = new ConcurrentSkipListMap<>();
-        askOrders.put(100, og1);
-
-        ConcurrentSkipListMap<Integer, OrderGroup> bidOrders = new ConcurrentSkipListMap<>(Comparator.reverseOrder());
-        bidOrders.put(90, og2);
-
-        OrderBook orderBook = new OrderBook(askOrders, bidOrders, 0, 0, 0);
-
-        System.out.println("Order Book:");
-        orderBook.printOrderBook();
-        System.out.println("best ask: " + orderBook.getBestAskPrice());
-        System.out.println("best bid: " + orderBook.getBestBidPrice());
-
-        orderBook.execLimitOrder("mario", 50, 101, "bid");
-
-        System.out.println("Order Book after bid order:");
-        orderBook.printOrderBook();
-        System.out.println("best ask: " + orderBook.getBestAskPrice());
-        System.out.println("best bid: " + orderBook.getBestBidPrice());*/
-
-
+        inputFile.close();
     }
 }
