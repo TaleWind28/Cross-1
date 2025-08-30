@@ -36,7 +36,7 @@ public class ServerMain {
         // UserManager userManager = new UserManager();
         // mettere anche variabili per le varie liste
 
-        // UdpNotifier udpNotifier = new UdpNotifier();
+        UdpNotifier udpNotifier = new UdpNotifier(udpPort);
 
         // TCP socket
         try {
@@ -52,7 +52,7 @@ public class ServerMain {
                     
                     Socket clientSocket = serverSocket.accept();
 
-                    ClientHandler handler = new ClientHandler(clientSocket, null);
+                    ClientHandler handler = new ClientHandler(clientSocket, udpNotifier);
 
                     pool.execute(handler);
 
