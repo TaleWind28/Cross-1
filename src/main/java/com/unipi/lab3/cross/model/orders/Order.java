@@ -13,10 +13,6 @@ public class Order {
 
     private int size;
 
-    // date can be useful?
-
-    // what else?
-
     public Order (int orderID, String username, String type, int size) {
         this.orderID = orderID;
         this.username = username;

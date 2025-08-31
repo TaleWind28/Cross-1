@@ -3,8 +3,6 @@ package com.unipi.lab3.cross.server;
 import java.io.*;
 import java.net.Socket;
 
-
-
 public class ClientHandler implements Runnable {
 
     private Socket clientSocket;
