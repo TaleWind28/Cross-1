@@ -12,6 +12,7 @@ import com.google.gson.GsonBuilder;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ClientMain {
 
@@ -35,7 +36,7 @@ public class ClientMain {
     private static boolean active = false;
 
     private static String username;
-    private static boolean logged = false;
+    private static final AtomicBoolean logged = new AtomicBoolean(false);
 
     public static void main (String[] args) throws Exception {
 
@@ -49,7 +50,7 @@ public class ClientMain {
 
             scanner = new Scanner(System.in);
 
-            clientReceiver = new ClientReceiver(in);
+            clientReceiver = new ClientReceiver(in, logged);
             receiver = new Thread(clientReceiver);
             receiver.start();
 
@@ -151,7 +152,7 @@ public class ClientMain {
             break;
 
             case "login":
-                if (logged) {
+                if (logged.get()) {
                     System.out.println("you are already logged in");
                     break;
                 }
@@ -192,7 +193,7 @@ public class ClientMain {
             break;
 
             case "updateCredentials":
-                if (logged) {
+                if (logged.get()) {
                     System.out.println("you can't change credentials while logged in");
                     break;
                 }
@@ -217,7 +218,7 @@ public class ClientMain {
                     System.out.println("you have to sign in first");
                     break;
                 }
-                else if (!logged) {
+                else if (!logged.get()) {
                     System.out.println("you are not logged in");
                     break;
                 }
@@ -234,7 +235,7 @@ public class ClientMain {
             break;
 
             case "insertLimitOrder":
-                if (username == null || !logged) {
+                if (username == null || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }
@@ -275,7 +276,7 @@ public class ClientMain {
             break;
 
             case "insertMarketOrder":
-                if (username == null || !logged) {
+                if (username == null || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }
@@ -312,7 +313,7 @@ public class ClientMain {
             break;
 
             case "insertStopOrder":
-                if (username == null || !logged) {
+                if (username == null || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }    
@@ -352,7 +353,7 @@ public class ClientMain {
             break;
 
             case "cancelOrder":
-                if (username == null || !logged) {
+                if (username == null || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }
@@ -386,7 +387,7 @@ public class ClientMain {
             break;
 
             case "getPriceHistory":
-                if (username == null || !logged) {
+                if (username == null || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }

@@ -1,7 +1,7 @@
 package com.unipi.lab3.cross.server;
 
 import java.io.*;
-import java.net.Socket;
+import java.net.*;
 
 public class ClientHandler implements Runnable {
 
@@ -11,7 +11,7 @@ public class ClientHandler implements Runnable {
     private String username;
 
     private volatile long lastActivityTime;
-    private volatile boolean active;
+    private volatile boolean running;
 
     public ClientHandler(Socket clientSocket, UdpNotifier udpNotifier) {
         this.clientSocket = clientSocket;
@@ -21,21 +21,16 @@ public class ClientHandler implements Runnable {
     @Override
     public void run() {
 
-        active = true;
-
-        String receivedMsg = null;
+        running = true;
 
         try (
             BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)) {
 
+                String receivedMsg;
+
                 // listening for client messages
-                while (active) {
-
-                    receivedMsg = in.readLine();
-
-                    if (receivedMsg == null)
-                        break;
+                while (running && ((receivedMsg = in.readLine()) != null)) {
 
                     updateLastActivityTime();
 
@@ -52,7 +47,7 @@ public class ClientHandler implements Runnable {
             
         }
         finally {
-            active = false;
+            running = false;
             try {
                 clientSocket.close();
             } catch (IOException e) {
