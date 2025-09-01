@@ -22,12 +22,14 @@ public class ServerMain {
 
     public static ServerSocket serverSocket;
 
+    public static UdpNotifier udpNotifier;
+
     //threadpool
     public static final ExecutorService pool = Executors.newCachedThreadPool();
 
     public static void main(String[] args) throws Exception{
 
-        readConfig();
+        getServerProperties();
 
 
         // upload orderbook, users from file ? how to do it ?
@@ -36,7 +38,7 @@ public class ServerMain {
         // UserManager userManager = new UserManager();
         // mettere anche variabili per le varie liste
 
-        UdpNotifier udpNotifier = new UdpNotifier(udpPort);
+        udpNotifier = new UdpNotifier(udpPort);
 
         // TCP socket
         try {
@@ -71,7 +73,7 @@ public class ServerMain {
         }
     }
 
-    public static void readConfig () throws FileNotFoundException, IOException {
+    public static void getServerProperties () throws FileNotFoundException, IOException {
         Properties props = new Properties();
 
         FileInputStream inputFile = new FileInputStream(configFile);

@@ -6,11 +6,12 @@ import java.net.Socket;
 public class ClientHandler implements Runnable {
 
     private Socket clientSocket;
-    private volatile long lastActivityTime;
-    private volatile boolean active;
 
     private UdpNotifier udpNotifier; // shared
     private String username;
+
+    private volatile long lastActivityTime;
+    private volatile boolean active;
 
     public ClientHandler(Socket clientSocket, UdpNotifier udpNotifier) {
         this.clientSocket = clientSocket;
@@ -26,7 +27,7 @@ public class ClientHandler implements Runnable {
 
         try (
             BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);) {
+            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)) {
 
                 // listening for client messages
                 while (active) {

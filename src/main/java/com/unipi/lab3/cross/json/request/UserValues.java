@@ -4,6 +4,22 @@ public class UserValues implements Values {
     private String username;
     private String password;
     private String newPassword;
+    private NetworkValues networkValues;
+
+    public UserValues (String username) {
+        this.username = username;
+    }
+
+    public UserValues (String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
+ 
+    public UserValues (String username, String password, NetworkValues netVal) {
+        this.username = username;
+        this.password = password;
+        this.networkValues = netVal;
+    }
 
     public UserValues (String username, String password, String newPassword) {
         this.username = username;
