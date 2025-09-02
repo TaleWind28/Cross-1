@@ -5,6 +5,8 @@ public class UserResponse extends Response {
     private int response;
     private String errorMessage;
 
+    public UserResponse() {}
+
     public UserResponse(String operation, int response, String errorMessage) {
         this.operation = operation;
         this.response = response;

@@ -2,6 +2,7 @@ package com.unipi.lab3.cross.main;
 
 import com.unipi.lab3.cross.model.*;
 import com.unipi.lab3.cross.model.orders.*;
+import com.unipi.lab3.cross.model.user.*;
 import com.unipi.lab3.cross.server.*;
 
 import java.io.*;
@@ -18,11 +19,14 @@ public class ServerMain {
     public static int tcpPort;
     public static int udpPort;
 
-    public static int inactivityTimeout;
-
     public static ServerSocket serverSocket;
 
+    private static UserManager userManager;
+    private static OrderBook orderBook;
+
     public static UdpNotifier udpNotifier;
+
+    public static int inactivityTimeout;
 
     //threadpool
     public static final ExecutorService pool = Executors.newCachedThreadPool();
@@ -35,7 +39,7 @@ public class ServerMain {
         // upload orderbook, users from file ? how to do it ?
 
         // OrderBook orderBook = new OrderBook();
-        // UserManager userManager = new UserManager();
+        UserManager userManager = new UserManager();
         // mettere anche variabili per le varie liste
 
         udpNotifier = new UdpNotifier(udpPort);
@@ -54,7 +58,7 @@ public class ServerMain {
                     
                     Socket clientSocket = serverSocket.accept();
 
-                    ClientHandler handler = new ClientHandler(clientSocket, udpNotifier);
+                    ClientHandler handler = new ClientHandler(clientSocket, userManager, orderBook, udpNotifier);
 
                     pool.execute(handler);
 

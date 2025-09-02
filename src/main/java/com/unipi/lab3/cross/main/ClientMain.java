@@ -3,9 +3,11 @@ package com.unipi.lab3.cross.main;
 import com.unipi.lab3.cross.client.*;
 import com.unipi.lab3.cross.json.request.*;
 import com.unipi.lab3.cross.json.response.*;
+import com.unipi.lab3.cross.model.OrderBook;
 import com.unipi.lab3.cross.model.orders.Order;
 import com.unipi.lab3.cross.model.user.User;
-
+import com.unipi.lab3.cross.model.user.UserManager;
+import com.unipi.lab3.cross.server.UdpNotifier;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -16,10 +18,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ClientMain {
 
-    public static final String configFile = "client.properties";
+    private static final String configFile = "client.properties";
 
-    public static int tcpPort;
-    public static String address;
+    private static int tcpPort;
+    private static String address;
 
     private static Socket socket;
 

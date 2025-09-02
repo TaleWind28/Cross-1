@@ -5,7 +5,9 @@ import java.net.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.google.gson.*;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import com.unipi.lab3.cross.json.response.*;
 
@@ -36,17 +38,17 @@ public class ClientReceiver implements Runnable {
 
                 if (obj.has("orderID")) {
                     // order response
-                    int orderID = obj.get("orderID").getAsInt();
-                    OrderResponse orderResponse = new OrderResponse(orderID);
+                    Gson gson = new Gson();
+
+                    OrderResponse orderResponse = gson.fromJson(responseMsg, OrderResponse.class);
 
                     handleResponse(orderResponse);
                 }
                 else if (obj.has("operation") && obj.has("response") && obj.has("errorMessage")) {
                     // user response
-                    String operation = obj.get("operation").getAsString();
-                    int response = obj.get("response").getAsInt();
-                    String errorMessage = obj.get("errorMessage").getAsString();
-                    UserResponse userResponse = new UserResponse(operation, response, errorMessage);
+                    Gson gson = new Gson();
+
+                    UserResponse userResponse = gson.fromJson(responseMsg, UserResponse.class);
 
                     handleResponse(userResponse);
                 }
@@ -56,8 +58,14 @@ public class ClientReceiver implements Runnable {
                 }
             }
         }
-        catch (Exception e) {
+        catch (SocketException e) {
 
+        }
+        catch (IOException e) {
+            System.err.println(e.getMessage());
+        }
+        finally {
+            running = false;
         }
     }
 
@@ -128,6 +136,14 @@ public class ClientReceiver implements Runnable {
                     }
                 break;
 
+                case "insertLimitOrder":
+                case "insertMarketOrder":
+                case "insertStopOrder":
+                    if (userResponse.getResponse() != 100) {
+                        System.out.println(userResponse.getErrorMessage());
+                    }
+                break;
+
                 case "getOrderBook":
                     // print order book and stop orders
 
@@ -136,6 +152,10 @@ public class ClientReceiver implements Runnable {
                 case "getPriceHistory":
                     // print price history
 
+                break;
+
+                default:
+                    System.out.println(userResponse.getErrorMessage());
                 break;
             }
         }

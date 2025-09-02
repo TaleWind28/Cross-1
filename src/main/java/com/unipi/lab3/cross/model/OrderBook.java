@@ -130,7 +130,7 @@ public class OrderBook {
     }
 
     // methods for execute a limit order
-    public int execLimitOrder (String username, int size, int price, String type) {
+    public int execLimitOrder (String username, String type, int size, int price) {
 
         // check the type of the order
         if (type.equals("ask")) {

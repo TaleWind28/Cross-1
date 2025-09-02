@@ -88,9 +88,8 @@ public class UserManager {
 
         User user = this.users.get(username);
 
-        // user not found
-        if (user == null)
-            return 103;
+        if (user.getLogged())
+            return 102;
         
         String currentPwd = user.getPassword();
 
@@ -107,10 +106,6 @@ public class UserManager {
     public int logout (String username) {
 
         User user = this.users.get(username);
-
-        // user not found
-        if (user == null)
-            return 101;
 
         // unset logged state
         user.setLogged(false);

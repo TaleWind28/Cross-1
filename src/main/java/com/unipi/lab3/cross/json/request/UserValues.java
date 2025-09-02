@@ -39,6 +39,10 @@ public class UserValues implements Values {
         return newPassword;
     }
 
+    public NetworkValues getNetworkValues () {
+        return networkValues;
+    }
+
     public void setUsername (String username) {
         this.username = username;
     }
