@@ -2,6 +2,7 @@ package com.unipi.lab3.cross.main;
 
 import com.unipi.lab3.cross.model.*;
 import com.unipi.lab3.cross.model.orders.*;
+import com.unipi.lab3.cross.model.trade.*;
 import com.unipi.lab3.cross.model.user.*;
 import com.unipi.lab3.cross.server.*;
 
@@ -23,6 +24,7 @@ public class ServerMain {
 
     private static UserManager userManager;
     private static OrderBook orderBook;
+    private static TradeMap tradeMap;
 
     public static UdpNotifier udpNotifier;
 
@@ -37,11 +39,12 @@ public class ServerMain {
 
         udpNotifier = new UdpNotifier(udpPort);
 
-        // upload orderbook, users from file ? how to do it ?
+        // upload orderbook, users, trades from file ? how to do it ?
 
         // OrderBook orderBook = new OrderBook();
         UserManager userManager = new UserManager();
         // mettere anche variabili per le varie liste
+        TradeMap tradeMap = new TradeMap();
 
         // TCP socket
         try {
@@ -57,7 +60,7 @@ public class ServerMain {
                     
                     Socket clientSocket = serverSocket.accept();
 
-                    ClientHandler handler = new ClientHandler(clientSocket, userManager, orderBook, udpNotifier);
+                    ClientHandler handler = new ClientHandler(clientSocket, userManager, orderBook, tradeMap, udpNotifier);
 
                     pool.execute(handler);
 

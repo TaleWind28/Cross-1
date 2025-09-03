@@ -9,6 +9,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import com.unipi.lab3.cross.json.response.*;
+import com.unipi.lab3.cross.model.trade.DailyTradingStats;
 
 public class ClientReceiver implements Runnable {
 
@@ -48,6 +49,14 @@ public class ClientReceiver implements Runnable {
                     UserResponse userResponse = gson.fromJson(responseMsg, UserResponse.class);
 
                     handleResponse(userResponse);
+                }
+                else if (obj.has("date") && obj.has("stats")) {
+                    // history response
+                    Gson gson = new Gson();
+
+                    HistoryResponse historyResponse = gson.fromJson(responseMsg, HistoryResponse.class);
+
+                    handleResponse(historyResponse);
                 }
                 else {  
                     // unknown response
@@ -153,7 +162,7 @@ public class ClientReceiver implements Runnable {
                 break;
 
                 case "getPriceHistory":
-                    // print price history
+                    
 
                 break;
 
@@ -162,7 +171,17 @@ public class ClientReceiver implements Runnable {
                 break;
             }
         }
-    
+        else if (responseMsg instanceof HistoryResponse) {
+            HistoryResponse historyResponse = (HistoryResponse) responseMsg;
+
+            System.out.println("price history " + historyResponse.getDate().getMonthValue() + "-" + historyResponse.getDate().getYear());
+
+            for (DailyTradingStats stats : historyResponse.getStats()) {
+                System.out.println(stats.toString());
+            }
+        }
+        else {
+            System.out.println("unknown response");
+        }
     }
-    
 }

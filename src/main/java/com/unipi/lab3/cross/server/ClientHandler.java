@@ -2,15 +2,19 @@ package com.unipi.lab3.cross.server;
 
 import java.io.*;
 import java.net.*;
+import java.time.Year;
+import java.time.YearMonth;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+
 import com.unipi.lab3.cross.model.*;
 import com.unipi.lab3.cross.model.user.*;
 import com.unipi.lab3.cross.model.orders.*;
+import com.unipi.lab3.cross.model.trade.*;
 import com.unipi.lab3.cross.server.*;
 import com.unipi.lab3.cross.client.*;
 import com.unipi.lab3.cross.json.request.*;
@@ -22,6 +26,9 @@ public class ClientHandler implements Runnable {
 
     private OrderBook orderBook; // shared
     private UserManager userManager; // shared
+    private TradeMap tradeMap; // shared
+
+    private PriceHistory priceHistory;
 
     private UdpNotifier udpNotifier; // shared
     private int udpPort;
@@ -34,11 +41,13 @@ public class ClientHandler implements Runnable {
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    public ClientHandler(Socket clientSocket, UserManager userManager, OrderBook orderBook, UdpNotifier udpNotifier) {
+    public ClientHandler(Socket clientSocket, UserManager userManager, OrderBook orderBook, TradeMap tradeMap, UdpNotifier udpNotifier) {
         this.clientSocket = clientSocket;
         this.userManager = userManager;
         this.orderBook = orderBook;
+        this.tradeMap = tradeMap;
         this.udpNotifier = udpNotifier;
+        this.priceHistory = new PriceHistory();
         this.user = null; // initially not authenticated
     }
 
@@ -254,7 +263,7 @@ public class ClientHandler implements Runnable {
 
                 code = orderBook.execLimitOrder(this.user.getUsername(), orderVal.getType(), orderVal.getSize(), orderVal.getPrice());
 
-                if (code != -1) {
+                if (code == -1) {
                     System.out.println("error with limit order inserted by user " + this.user.getUsername());
                 }
 
@@ -272,7 +281,7 @@ public class ClientHandler implements Runnable {
 
                 code = orderBook.execMarketOrder(orderVal.getSize(), orderVal.getType(), "market", this.user.getUsername(), -1);
 
-                if (code != -1) {
+                if (code == -1) {
                     System.out.println("market order inserted by user " + this.user.getUsername() + "cannot be executed");
                 }
 
@@ -294,6 +303,8 @@ public class ClientHandler implements Runnable {
                 if (code == -1) {
                     System.out.println("error with stop order inserted by user " + this.user.getUsername());
                 }
+
+                response = new OrderResponse(code);
 
             break;
 
@@ -339,10 +350,18 @@ public class ClientHandler implements Runnable {
                 if (this.user.getLogged() == false)
                     return new UserResponse("getPriceHistory", 102, "you can't get price history if not logged in");
 
-                // same as order book ...
-                // provide a function and put price history in msg
+                HistoryValues historyVal = gson.fromJson(obj.get("values"), HistoryValues.class);
 
-                response = new UserResponse("getPriceHistory", code, msg);
+                int months = historyVal.getMonth();
+                int year = historyVal.getYear();  
+
+                if (months < 1 || months > 12)
+                    return new UserResponse("getPriceHistory", 103, "invalid month");
+                    
+                if (year < 1970 || year > Year.now().getValue())
+                    return new UserResponse("getPriceHistory", 104, "invalid year");
+
+                response = new HistoryResponse(YearMonth.of(year, months), priceHistory.getPriceHistory(YearMonth.of(year, months), tradeMap));
             break;
 
             default:
