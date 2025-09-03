@@ -2,7 +2,6 @@ package com.unipi.lab3.cross.client;
 
 import java.io.*;
 import java.net.*;
-import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.google.gson.Gson;
@@ -12,8 +11,6 @@ import com.google.gson.JsonParser;
 import com.unipi.lab3.cross.json.response.*;
 
 public class ClientReceiver implements Runnable {
-
-    private Socket serverSocket;
 
     private BufferedReader in;
 
@@ -66,6 +63,12 @@ public class ClientReceiver implements Runnable {
         }
         finally {
             running = false;
+            try {
+                in.close();
+            }
+            catch (IOException e) {
+                System.err.println(e.getMessage());
+            }
         }
     }
 

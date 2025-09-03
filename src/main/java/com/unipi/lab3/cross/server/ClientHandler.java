@@ -32,6 +32,8 @@ public class ClientHandler implements Runnable {
 
     private volatile boolean running;
 
+    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
     public ClientHandler(Socket clientSocket, UserManager userManager, OrderBook orderBook, UdpNotifier udpNotifier) {
         this.clientSocket = clientSocket;
         this.userManager = userManager;
@@ -63,9 +65,6 @@ public class ClientHandler implements Runnable {
                         // convert response to json
 
                         if (response != null) {
-                            Gson gson = new GsonBuilder()
-                                        .setPrettyPrinting()
-                                        .create();
                             
                             String jsonString = gson.toJson(response);
 

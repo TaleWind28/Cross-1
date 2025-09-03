@@ -7,7 +7,6 @@ import com.unipi.lab3.cross.model.OrderBook;
 import com.unipi.lab3.cross.model.orders.Order;
 import com.unipi.lab3.cross.model.user.User;
 import com.unipi.lab3.cross.model.user.UserManager;
-import com.unipi.lab3.cross.server.UdpNotifier;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -39,6 +38,8 @@ public class ClientMain {
 
     private static String username;
     private static final AtomicBoolean logged = new AtomicBoolean(false);
+
+    private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     public static void main (String[] args) throws Exception {
 
@@ -101,9 +102,6 @@ public class ClientMain {
 
                     if (request != null) {
                         // convert to json message with gson builder
-                        Gson gson = new GsonBuilder()
-                                        .setPrettyPrinting()
-                                        .create();
                         
                         String jsonString = gson.toJson(request);
 
@@ -168,7 +166,7 @@ public class ClientMain {
                 password = paramList.get(1);
 
                 try {
-                    udpListener = new UdpListener(0);
+                    udpListener = new UdpListener(in, 0);
                     listener = new Thread(udpListener);
 
                     listener.start();

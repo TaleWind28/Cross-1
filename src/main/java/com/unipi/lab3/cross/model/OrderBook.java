@@ -2,12 +2,17 @@ package com.unipi.lab3.cross.model;
 
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.time.LocalDate;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.unipi.lab3.cross.model.orders.*;
+import com.unipi.lab3.cross.model.trade.*;
+import com.unipi.lab3.cross.server.UdpNotifier;
+import com.unipi.lab3.cross.json.response.Notification;
 
 public class OrderBook {
 
@@ -30,7 +35,11 @@ public class OrderBook {
 
     private static final AtomicInteger idCounter = new AtomicInteger(100);
 
-    public OrderBook (ConcurrentSkipListMap<Integer, OrderGroup> askOrders, ConcurrentSkipListMap<Integer, OrderGroup> bidOrders, int spread, int bestAskPrice, int bestBidPrice) {
+    private TradeMap tradeMap;
+
+    private UdpNotifier udpNotifier;
+
+    public OrderBook (ConcurrentSkipListMap<Integer, OrderGroup> askOrders, ConcurrentSkipListMap<Integer, OrderGroup> bidOrders, int spread, int bestAskPrice, int bestBidPrice, UdpNotifier notifier) {
         this.askOrders = askOrders;
         this.bidOrders = bidOrders;
         this.spread = spread;
@@ -38,6 +47,10 @@ public class OrderBook {
         this.bestBidPrice = bestBidPrice;
         this.stopAsks = new ConcurrentLinkedQueue<>();
         this.stopBids = new ConcurrentLinkedQueue<>();
+
+        this.tradeMap = new TradeMap();
+        
+        this.udpNotifier = notifier;
 
         updateBestPrices();
     }
@@ -178,6 +191,9 @@ public class OrderBook {
         if (newSize == 0) {
             updateBestPrices();
 
+            // when fully executed, add to trade map
+            insertTrade(orderId, "ask", "limit", size, price, LocalDate.now(), username);
+
             // order fully executed
             return orderId;
         }
@@ -230,6 +246,10 @@ public class OrderBook {
 
         if (newSize == 0) {
             updateBestPrices();
+
+            // when fully executed, add to trade map
+            insertTrade(orderId, "bid", "limit", size, price, LocalDate.now(), username);
+
             // order fully executed
             return orderId;
         }
@@ -267,6 +287,9 @@ public class OrderBook {
                     // order partially executed but opposite order executed
                     size -= orderSize;
 
+                    // add the opposite order to the trade map
+                    insertTrade(order.getOrderId(), order.getType(), "limit", orderSize, orderPrice, LocalDate.now(), order.getUsername());
+
                     // remove the opposite order from the group
                     iterator.remove();
                             
@@ -275,6 +298,9 @@ public class OrderBook {
                 }
                 else if (orderSize == size) {
                     // both orders are fully executed
+
+                    // add the opposite order to the trade map
+                    insertTrade(order.getOrderId(), order.getType(), "limit", orderSize, orderPrice, LocalDate.now(), order.getUsername());
 
                     // remove the opposite order from the group
                     iterator.remove();
@@ -292,7 +318,6 @@ public class OrderBook {
                     return 0;
                 }
             }
-
         }
 
         return size;
@@ -361,6 +386,9 @@ public class OrderBook {
                 if (result == order.getOrderId()) {
                     // order executed successfully
 
+                    // when fully executed, add to trade map
+                    insertTrade(order.getOrderId(), "ask", "stop", order.getSize(), order.getStopPrice(), LocalDate.now(), order.getUsername());
+
                     // remove stop order from the queue
                     askIterator.remove();
                 }
@@ -386,6 +414,9 @@ public class OrderBook {
 
                 if (result == order.getOrderId()) {
                     // order executed successfully
+
+                    // when fully executed, add to trade map
+                    insertTrade(order.getOrderId(), "bid", "stop", order.getSize(), order.getStopPrice(), LocalDate.now(), order.getUsername());
 
                     bidIterator.remove(); // remove stop order from the queue
 
@@ -446,6 +477,13 @@ public class OrderBook {
             }
 
             updateBestPrices();
+
+            // when fully executed, add to trade map
+            if (type.equals("ask"))
+                insertTrade(orderId, "ask", "market", size, 0, LocalDate.now(), username);
+            else
+                insertTrade(orderId, "bid", "market", size, 0, LocalDate.now(), username);
+
 
             return orderId;
         }
@@ -525,6 +563,22 @@ public class OrderBook {
 
         // error -> order not found or not removed
         return 101;
+    }
+
+    public void insertTrade (int tradeID, String type, String orderType, int size, int price, LocalDate date, String username) {
+        Trade trade;
+
+        if (price == 0)
+            trade = new Trade(tradeID, type, orderType, size, username);
+        else   
+            trade = new Trade(tradeID, type, orderType, size, price, username);
+
+        this.tradeMap.addTrade(date, trade);
+
+        LinkedList<Trade> trades = new LinkedList<>();
+        trades.add(trade);
+
+        this.udpNotifier.notifyClient(username, new Notification(trades));
     }
 
     public void printOrderBook () {

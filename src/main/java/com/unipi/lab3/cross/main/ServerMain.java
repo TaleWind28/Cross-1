@@ -35,14 +35,13 @@ public class ServerMain {
 
         getServerProperties();
 
+        udpNotifier = new UdpNotifier(udpPort);
 
         // upload orderbook, users from file ? how to do it ?
 
         // OrderBook orderBook = new OrderBook();
         UserManager userManager = new UserManager();
         // mettere anche variabili per le varie liste
-
-        udpNotifier = new UdpNotifier(udpPort);
 
         // TCP socket
         try {
