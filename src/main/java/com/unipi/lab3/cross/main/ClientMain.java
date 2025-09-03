@@ -166,7 +166,7 @@ public class ClientMain {
                 password = paramList.get(1);
 
                 try {
-                    udpListener = new UdpListener(in, 0);
+                    udpListener = new UdpListener(0);
                     listener = new Thread(udpListener);
 
                     listener.start();
