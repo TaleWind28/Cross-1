@@ -10,6 +10,7 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -26,7 +27,12 @@ public class ServerMain {
     private static OrderBook orderBook;
     private static TradeMap tradeMap;
 
+    public static ConcurrentHashMap<Socket, ClientHandler> activeClients;
+
     public static UdpNotifier udpNotifier;
+
+    public static InactivityHandler inactivityHandler;
+    public static Thread inactivityThread;
 
     public static int inactivityTimeout;
 
@@ -36,6 +42,8 @@ public class ServerMain {
     public static void main(String[] args) throws Exception{
 
         getServerProperties();
+
+        activeClients = new ConcurrentHashMap<Socket, ClientHandler>();
 
         udpNotifier = new UdpNotifier(udpPort);
 
@@ -52,6 +60,10 @@ public class ServerMain {
             serverSocket = new ServerSocket(tcpPort);
 
             // inactivity handler thread
+            inactivityHandler = new InactivityHandler(activeClients, userManager, orderBook);
+            inactivityThread = new Thread(inactivityHandler);
+            inactivityThread.start();
+
             // Runtime ...
 
             // listening server for client connections
@@ -60,7 +72,9 @@ public class ServerMain {
                     
                     Socket clientSocket = serverSocket.accept();
 
-                    ClientHandler handler = new ClientHandler(clientSocket, userManager, orderBook, tradeMap, udpNotifier);
+                    ClientHandler handler = new ClientHandler(clientSocket, userManager, orderBook, tradeMap, udpNotifier, inactivityHandler);
+
+                    activeClients.put(clientSocket, handler);
 
                     pool.execute(handler);
 

@@ -71,6 +71,24 @@ public class OrderBook {
         return this.stopBids;
     }
 
+    public ConcurrentLinkedQueue<StopOrder> getUserStopOrders (String username) {
+        ConcurrentLinkedQueue<StopOrder> userStopOrders = new ConcurrentLinkedQueue<>();
+
+        for (StopOrder order : this.stopAsks) {
+            if (order.getUsername().equals(username)) {
+                userStopOrders.add(order);
+            }
+        }
+
+        for (StopOrder order : this.stopBids) {
+            if (order.getUsername().equals(username)) {
+                userStopOrders.add(order);
+            }
+        }
+
+        return userStopOrders;
+    }
+
     public int getSpread () {
         return this.spread;
     }

@@ -22,7 +22,10 @@ import com.unipi.lab3.cross.json.response.*;
 
 public class ClientHandler implements Runnable {
 
-    private Socket clientSocket;
+    private final Socket clientSocket;
+
+    private User user;
+    private volatile long lastActivityTime;
 
     private OrderBook orderBook; // shared
     private UserManager userManager; // shared
@@ -33,22 +36,23 @@ public class ClientHandler implements Runnable {
     private UdpNotifier udpNotifier; // shared
     private int udpPort;
 
-    private User user;
-
-    private volatile long lastActivityTime;
+    private InactivityHandler inactivityHandler; // shared
 
     private volatile boolean running;
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    public ClientHandler(Socket clientSocket, UserManager userManager, OrderBook orderBook, TradeMap tradeMap, UdpNotifier udpNotifier) {
+    public ClientHandler(Socket clientSocket, UserManager userManager, OrderBook orderBook, TradeMap tradeMap, UdpNotifier udpNotifier, InactivityHandler inactivityHandler) {
         this.clientSocket = clientSocket;
+
+        this.user = null; // initially not authenticated
+
         this.userManager = userManager;
         this.orderBook = orderBook;
         this.tradeMap = tradeMap;
         this.udpNotifier = udpNotifier;
+        this.inactivityHandler = inactivityHandler;
         this.priceHistory = new PriceHistory();
-        this.user = null; // initially not authenticated
     }
 
     @Override
@@ -83,11 +87,11 @@ public class ClientHandler implements Runnable {
                     }
                     catch (JsonSyntaxException e) {
                         System.err.println(e.getMessage());
-                        out.println(new Gson().toJson(new UserResponse("error", -1, "json error")));
+                        out.println(gson.toJson(new UserResponse("error", -1, "json error")));
                     }
                     catch (Exception e) {
                         System.err.println(e.getMessage());
-                        out.println(new Gson().toJson(new UserResponse("error", -1, "server error")));
+                        out.println(gson.toJson(new UserResponse("error", -1, "server error")));
                     }
 
                 }
@@ -113,9 +117,7 @@ public class ClientHandler implements Runnable {
             } catch (IOException e) {
                 System.err.println("socket error" + e.getMessage());
             }
-
         }
-        
     }
 
     // process request with json
@@ -151,6 +153,8 @@ public class ClientHandler implements Runnable {
                     msg = "username not available";
                 else if (code == 103)
                     msg = "invalid username";
+                
+                updateLastActivityTime();
 
                 response = new UserResponse("register", code, msg);
 
@@ -178,6 +182,8 @@ public class ClientHandler implements Runnable {
                     msg = "old password mismatch";
                 else if (code == 103)
                     msg = "new passord equal to old one";
+
+                updateLastActivityTime();
 
                 response = new UserResponse("updateCredentials", code, msg);
 
@@ -372,12 +378,31 @@ public class ClientHandler implements Runnable {
         return response;
     }
 
+    // capire se la best practice è metterli prima o dopo run
+
+    public Socket getClientSocket() {
+        return this.clientSocket;
+    }
+
+    public String getUsername() {
+        if (this.user != null)
+            return this.user.getUsername();
+        else
+            return null;
+    }
+
     public long getLastActivityTime() {
         return lastActivityTime;
     }
 
-    public void updateLastActivityTime() {
+    public void updateLastActivityTime () {
         this.lastActivityTime = System.currentTimeMillis();
     }
 
+    public boolean isLoggedIn() {
+        if (this.user != null)
+            return this.user.getLogged();
+        else
+            return false;
+    }
 }
