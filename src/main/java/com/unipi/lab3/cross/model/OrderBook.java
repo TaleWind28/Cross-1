@@ -33,11 +33,27 @@ public class OrderBook {
     private int bestAskPrice;
     private int bestBidPrice;
 
-    private static final AtomicInteger idCounter = new AtomicInteger(100);
+    private transient static final AtomicInteger idCounter = new AtomicInteger(100);
 
-    private TradeMap tradeMap;
+    private transient TradeMap tradeMap;
+    private transient LinkedList<Trade> bufferedTrades;
 
-    private UdpNotifier udpNotifier;
+    private transient UdpNotifier udpNotifier;
+
+    public OrderBook () {
+        this.askOrders = new ConcurrentSkipListMap<>();
+        this.bidOrders = new ConcurrentSkipListMap<>();
+        this.spread = -1;
+        this.bestAskPrice = 0;
+        this.bestBidPrice = 0;
+        this.stopAsks = new ConcurrentLinkedQueue<>();
+        this.stopBids = new ConcurrentLinkedQueue<>();
+
+        this.tradeMap = new TradeMap();
+        this.bufferedTrades = new LinkedList<>();
+
+        this.udpNotifier = null; // to be set later
+    }
 
     public OrderBook (ConcurrentSkipListMap<Integer, OrderGroup> askOrders, ConcurrentSkipListMap<Integer, OrderGroup> bidOrders, int spread, int bestAskPrice, int bestBidPrice, UdpNotifier notifier) {
         this.askOrders = askOrders;
@@ -48,7 +64,8 @@ public class OrderBook {
         this.stopAsks = new ConcurrentLinkedQueue<>();
         this.stopBids = new ConcurrentLinkedQueue<>();
 
-        this.tradeMap = new TradeMap();
+        this.tradeMap = tradeMap;
+        this.bufferedTrades = new LinkedList<>();
         
         this.udpNotifier = notifier;
 
@@ -69,24 +86,6 @@ public class OrderBook {
 
     public ConcurrentLinkedQueue<StopOrder> getStopBids () {
         return this.stopBids;
-    }
-
-    public ConcurrentLinkedQueue<StopOrder> getUserStopOrders (String username) {
-        ConcurrentLinkedQueue<StopOrder> userStopOrders = new ConcurrentLinkedQueue<>();
-
-        for (StopOrder order : this.stopAsks) {
-            if (order.getUsername().equals(username)) {
-                userStopOrders.add(order);
-            }
-        }
-
-        for (StopOrder order : this.stopBids) {
-            if (order.getUsername().equals(username)) {
-                userStopOrders.add(order);
-            }
-        }
-
-        return userStopOrders;
     }
 
     public int getSpread () {
@@ -158,6 +157,24 @@ public class OrderBook {
         if (oldAsk != this.bestAskPrice || oldBid != this.bestBidPrice) {
             execStopOrders();
         }
+    }
+
+    public ConcurrentLinkedQueue<StopOrder> getUserStopOrders (String username) {
+        ConcurrentLinkedQueue<StopOrder> userStopOrders = new ConcurrentLinkedQueue<>();
+
+        for (StopOrder order : this.stopAsks) {
+            if (order.getUsername().equals(username)) {
+                userStopOrders.add(order);
+            }
+        }
+
+        for (StopOrder order : this.stopBids) {
+            if (order.getUsername().equals(username)) {
+                userStopOrders.add(order);
+            }
+        }
+
+        return userStopOrders;
     }
 
     // methods for execute a limit order
@@ -498,10 +515,9 @@ public class OrderBook {
 
             // when fully executed, add to trade map
             if (type.equals("ask"))
-                insertTrade(orderId, "ask", "market", size, 0, LocalDate.now(), username);
+                insertTrade(orderId, "ask", "market", size, 0, LocalDate.now(), username); 
             else
                 insertTrade(orderId, "bid", "market", size, 0, LocalDate.now(), username);
-
 
             return orderId;
         }
@@ -595,6 +611,9 @@ public class OrderBook {
 
         LinkedList<Trade> trades = new LinkedList<>();
         trades.add(trade);
+
+        // also add to the buffered trades
+        this.bufferedTrades.add(trade);
 
         this.udpNotifier.notifyClient(username, new Notification(trades));
     }

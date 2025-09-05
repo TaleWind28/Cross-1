@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ServerMain {
@@ -24,8 +25,13 @@ public class ServerMain {
     public static ServerSocket serverSocket;
 
     private static UserManager userManager;
+
+    // list of all orders ...
+
     private static OrderBook orderBook;
+
     private static TradeMap tradeMap;
+    private static ArrayList<Trade> bufferedTrades;
 
     public static ConcurrentHashMap<Socket, ClientHandler> activeClients;
 
@@ -36,40 +42,61 @@ public class ServerMain {
 
     public static int inactivityTimeout;
 
+    public static PersistenceHandler persistenceHandler;
+
     //threadpool
     public static final ExecutorService pool = Executors.newCachedThreadPool();
 
     public static void main(String[] args) throws Exception{
-
-        getServerProperties();
-
-        activeClients = new ConcurrentHashMap<Socket, ClientHandler>();
-
-        udpNotifier = new UdpNotifier(udpPort);
-
-        // upload orderbook, users, trades from file ? how to do it ?
-
-        // OrderBook orderBook = new OrderBook();
-        UserManager userManager = new UserManager();
-        // mettere anche variabili per le varie liste
-        TradeMap tradeMap = new TradeMap();
-
-        // TCP socket
         try {
+            getServerProperties();
 
-            serverSocket = new ServerSocket(tcpPort);
+            // load from files into user manager, orderbook and trade map ...
+
+            userManager = new UserManager();
+
+            // order lists ...
+            orderBook = new OrderBook();
+
+            tradeMap = new TradeMap();
+
+            bufferedTrades = new ArrayList<>();
+
+            activeClients = new ConcurrentHashMap<>();
+
+            
+            udpNotifier = new UdpNotifier(udpPort);
+
+            persistenceHandler = new PersistenceHandler(orderBook, userManager, bufferedTrades);
+
+            ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+            scheduler.scheduleAtFixedRate(() -> {
+                try {
+                    persistenceHandler.saveAll();
+                } catch (Exception e) {
+                    System.err.println("Error during persistence: " + e.getMessage());
+                }
+            }, 1,1, java.util.concurrent.TimeUnit.MINUTES);
 
             // inactivity handler thread
             inactivityHandler = new InactivityHandler(activeClients, userManager, orderBook);
             inactivityThread = new Thread(inactivityHandler);
             inactivityThread.start();
 
-            // Runtime ...
+            // TCP socket
+            serverSocket = new ServerSocket(tcpPort);
+
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                public void run(){
+                    System.out.println("closing server...");
+                    // method to close ...
+                }
+            });
 
             // listening server for client connections
             while (true) {
                 try { 
-                    
+                        
                     Socket clientSocket = serverSocket.accept();
 
                     ClientHandler handler = new ClientHandler(clientSocket, userManager, orderBook, tradeMap, udpNotifier, inactivityHandler);
@@ -87,10 +114,37 @@ public class ServerMain {
                 }
 
             }
+
         }
         catch (Exception e) {
-            System.err.println(e.getMessage());
+            System.err.println("Server error: " + e.getMessage());
+            return;
         }
+    }
+
+    public void loadOrderBook () {
+
+    }
+
+    public void loadUsers () {
+
+    }
+
+    public void loadTrades () {
+
+    }
+
+    public void closeServer () {
+
+        // save data
+
+        // interrump all threads
+        // inactivity
+        // scheduler
+
+        // chiudere il pool
+
+        // chiudere socket
     }
 
     public static void getServerProperties () throws FileNotFoundException, IOException {
