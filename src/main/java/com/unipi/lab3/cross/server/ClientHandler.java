@@ -19,6 +19,7 @@ import com.unipi.lab3.cross.server.*;
 import com.unipi.lab3.cross.client.*;
 import com.unipi.lab3.cross.json.request.*;
 import com.unipi.lab3.cross.json.response.*;
+import com.unipi.lab3.cross.main.ServerMain;
 
 public class ClientHandler implements Runnable {
 
@@ -79,7 +80,6 @@ public class ClientHandler implements Runnable {
                         response = handleRequest(receivedMsg);
 
                         // convert response to json
-
                         if (response != null) {
                             
                             String jsonString = gson.toJson(response);
@@ -137,6 +137,15 @@ public class ClientHandler implements Runnable {
             String msg = "";
 
             switch (op) {
+                case "exit":
+                    if (this.user == null)
+                        return new UserResponse("exit", 101, "user error");
+
+                    stop();
+
+                    response = new UserResponse("exit", 100, "exited successfully");
+                break;
+
                 case "register":
                     UserValues userVal = gson.fromJson(obj.get("values"), UserValues.class);
 
@@ -438,5 +447,37 @@ public class ClientHandler implements Runnable {
 
     public boolean isValidPrice (int price) {
         return price >= MIN_VALUE && price <= MAX_VALUE;
+    }
+
+    public void stop() {
+        running = false;
+
+        // log out user if logged in
+        if (this.user != null && this.user.getLogged()) {
+            try {
+                userManager.logout(this.user.getUsername());
+                udpNotifier.removeClient(this.user.getUsername());
+
+                ServerMain.removeActiveClient(clientSocket);
+
+                this.user.setLogged(false);
+            }
+            catch (Exception e) {
+                System.err.println("error logging out user: " + e.getMessage());
+            }
+
+            this.user = null;
+
+            System.out.println("user logged out");
+        }
+
+        try {
+            if (clientSocket != null && !clientSocket.isClosed()) {
+                clientSocket.close();
+            }
+        } 
+        catch (IOException e) {
+            System.err.println("error closing client socket: " + e.getMessage());
+        }
     }
 }

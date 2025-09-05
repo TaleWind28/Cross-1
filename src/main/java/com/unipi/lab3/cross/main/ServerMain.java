@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.lang.reflect.Type;
 import java.time.*;
@@ -52,6 +53,7 @@ public class ServerMain {
 
     public static int inactivityTimeout;
 
+    public static ScheduledExecutorService scheduler;
     public static PersistenceHandler persistenceHandler;
 
     public static Gson gson = new Gson();
@@ -60,9 +62,18 @@ public class ServerMain {
     public static final ExecutorService pool = Executors.newCachedThreadPool();
 
     public static void main(String[] args) throws Exception{
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run(){
+                System.out.println("server shutting down...");
+                closeServer();
+            }
+        });
+
+        // read config file with server properties
+        getServerProperties();
+
         try {
-            // read config file with server properties
-            getServerProperties();
 
             // TCP socket
             serverSocket = new ServerSocket(tcpPort);
@@ -90,7 +101,7 @@ public class ServerMain {
 
             persistenceHandler = new PersistenceHandler(orderBook, userManager, bufferedTrades);
 
-            ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+            scheduler = Executors.newScheduledThreadPool(1);
             scheduler.scheduleAtFixedRate(() -> {
                 try {
                     persistenceHandler.saveAll();
@@ -103,13 +114,6 @@ public class ServerMain {
             inactivityHandler = new InactivityHandler(activeClients, userManager, orderBook);
             inactivityThread = new Thread(inactivityHandler);
             inactivityThread.start();
-
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                public void run(){
-                    System.out.println("closing server...");
-                    // method to close ...
-                }
-            });
 
             // listening server for client connections
             while (true) {
@@ -266,17 +270,81 @@ public class ServerMain {
         activeClients.remove(socket);
     }
 
-    public void closeServer () {
+    public static void closeServer() {
 
-        // save data
+        // save all data before closing
+        try {
+            if (persistenceHandler != null) {
+                persistenceHandler.saveAll();
+            }
+        } 
+        catch (Exception e) {
+            System.err.println("error while saving data: " + e.getMessage());
+        }
 
-        // interrump all threads
-        // inactivity
-        // scheduler
+        // close all active client connections
+        if (activeClients != null && !activeClients.isEmpty()) {
+            for (ClientHandler handler : activeClients.values()) {
+                try {
+                    handler.stop();
+                } 
+                catch (Exception e) {
+                    System.err.println("error shutting down client: " + e.getMessage());
+                }
+            }
+            activeClients.clear();
+        }
 
-        // chiudere il pool
+        // stop all threads
 
-        // chiudere socket
+        // close inactivity handler thread
+        if (inactivityHandler != null) {
+            inactivityHandler.stop();
+        }
+        if (inactivityThread != null && inactivityThread.isAlive()) {
+            inactivityThread.interrupt();
+        }
+
+        // close scheduler for persistence handler
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } 
+            catch (InterruptedException e) {
+                scheduler.shutdownNow();
+            }
+        }
+
+        // close thread pool
+        pool.shutdown();
+        try {
+            if (!pool.awaitTermination(5, TimeUnit.SECONDS)) {
+                pool.shutdownNow();
+            }
+        } 
+        catch (InterruptedException e) {
+            pool.shutdownNow();
+        }
+
+        // close server socket
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+            }
+        } 
+        catch (IOException e) {
+            System.err.println("error closing server socket: " + e.getMessage());
+        }
+
+        // close UDP notifier
+        if (udpNotifier != null) {
+            udpNotifier.close();
+        }
+
+        System.out.println("server closed");
     }
 
     public static void getServerProperties () throws FileNotFoundException, IOException {

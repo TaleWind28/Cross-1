@@ -18,7 +18,7 @@ public class ClientReceiver implements Runnable {
 
     private BufferedReader in;
 
-    private volatile boolean running;
+    private volatile boolean running = false;
 
     private final AtomicBoolean logged;
 
@@ -72,19 +72,12 @@ public class ClientReceiver implements Runnable {
             }
         }
         catch (SocketException e) {
-
+            if (running) {
+                System.err.println("socket error: " + e.getMessage());
+            }
         }
         catch (IOException e) {
             System.err.println(e.getMessage());
-        }
-        finally {
-            running = false;
-            try {
-                in.close();
-            }
-            catch (IOException e) {
-                System.err.println(e.getMessage());
-            }
         }
     }
 
@@ -166,6 +159,7 @@ public class ClientReceiver implements Runnable {
                 case "getOrderBook":
                     // print order book and stop orders
 
+
                 break;
 
                 case "getPriceHistory":
@@ -196,5 +190,9 @@ public class ClientReceiver implements Runnable {
         else {
             System.out.println("unknown response");
         }
+    }
+
+    public void stop() {
+        running = false;
     }
 }

@@ -17,7 +17,7 @@ public class InactivityHandler implements Runnable {
 
     private static final long TIMEOUT = 300000; // 5 minutes
 
-    // active sockets
+    private volatile boolean running = true;
 
     public InactivityHandler (ConcurrentHashMap<Socket, ClientHandler> activeClients, UserManager userManager, OrderBook orderBook) {
         this.activeClients = activeClients;
@@ -26,7 +26,7 @@ public class InactivityHandler implements Runnable {
     }
 
     public void run () {
-        while (true) {
+        while (running) {
             long now = System.currentTimeMillis();
 
             try {
@@ -93,5 +93,9 @@ public class InactivityHandler implements Runnable {
             return true;
         
         return false;
+    }
+
+    public void stop () {
+        running = false;
     }
 }

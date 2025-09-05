@@ -43,6 +43,13 @@ public class ClientMain {
 
     public static void main (String[] args) throws Exception {
 
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (active) {
+                close();
+                System.out.println("client shutting down");
+            }
+        }));
+
         getProperties();
 
         try {
@@ -80,11 +87,18 @@ public class ClientMain {
                         case "help":
                             // print all commands
                             System.out.println("available commands:");
-                            // ... to finish ...
-                        break;
-
-                        case "exit":
-                            close();
+                            System.out.println("- register(username,password)");
+                            System.out.println("- login(username,password)");
+                            System.out.println("- updateCredentials(username,oldPassword,newPassword)");
+                            System.out.println("- logout()");
+                            System.out.println("- insertLimitOrder(type, size, limitPrice)");
+                            System.out.println("- insertMarketOrder(type, size)");
+                            System.out.println("- insertStopOrder(type, size, stopPrice)");
+                            System.out.println("- cancelOrder(orderID)");
+                            System.out.println("- getOrderBook()");
+                            System.out.println("- getPriceHistory(month, year)");
+                            System.out.println("- exit()");
+                            System.out.println("- help");
                         break;
 
                         default:
@@ -133,6 +147,16 @@ public class ClientMain {
         Request request = null;
 
         switch (operation) {
+            case "exit":
+
+                stopThreads();
+
+                request = new Request<Values>("exit", null);
+
+                close();
+
+            break;
+
             case "register":
                 // check number of params
                 if (paramList.size() != 2) {
@@ -415,9 +439,61 @@ public class ClientMain {
         return request;
     }
 
-    public static void close () {
-        // implement ...
+    public static void stopThreads() {
+        try {
+            if (clientReceiver != null) {
+                clientReceiver.stop();
+            }
+            if (receiver != null && receiver.isAlive()) {
+                receiver.interrupt();
+            }
+        }
+        catch (Exception e) {
+            System.err.println("error stopping receiver: " + e.getMessage());
+        }
+
+        try {
+            if (udpListener != null) {
+                udpListener.stop();
+            }
+            if (listener != null && listener.isAlive()) {
+                listener.interrupt();
+            }
+        }
+        catch (Exception e) {
+            System.err.println("error stopping UDP listener: " + e.getMessage());
+        }
     }
+
+    public static void close() {
+        active = false;
+
+        try {
+            if (scanner != null) {
+                scanner.close();
+            }
+        } 
+        catch (Exception e) {
+            System.err.println("error closing scanner: " + e.getMessage());
+        }
+
+        try {
+            if (in != null) 
+                in.close();
+
+            if (out != null) 
+                out.close();
+
+            if (socket != null && !socket.isClosed())
+                socket.close();
+        } 
+        catch (IOException e) {
+            System.err.println("error closing socket: " + e.getMessage());
+        }
+
+        System.out.println("client closed");
+    }
+
 
     // check if input is valid
     // should be command(args,...) or command()

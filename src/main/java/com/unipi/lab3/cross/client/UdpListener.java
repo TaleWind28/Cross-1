@@ -63,9 +63,9 @@ public class UdpListener implements Runnable {
         }
     } 
     
-    public void stop() {
+    public synchronized void stop() {
         running = false;
-        socket.close();
+        if (socket != null && !socket.isClosed())
+            socket.close();
     }
-
 }
