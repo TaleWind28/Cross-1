@@ -57,7 +57,7 @@ public class OrderGroup {
         return this.limitOrders.isEmpty();
     }
 
-    public void updateGroup (int filledSize, int limitPrice) {
+    public synchronized void updateGroup (int filledSize, int limitPrice) {
         this.size -= filledSize;
         this.total = limitPrice * this.size;
     }
@@ -76,7 +76,7 @@ public class OrderGroup {
     }
 
     // add a limit order to the queue
-    public void addOrder (LimitOrder order) {
+    public synchronized void addOrder (LimitOrder order) {
         // add the new order to the existing queue
         this.limitOrders.add(order);
 
@@ -88,7 +88,7 @@ public class OrderGroup {
         this.total = newTotal;
     }
 
-    public boolean removeOrder (int orderId, String username) {
+    public synchronized boolean removeOrder (int orderId, String username) {
         // check if the order with this id exists
         // iterate through the queue
 

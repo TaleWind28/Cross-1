@@ -28,7 +28,7 @@ public class UserManager {
     }
 
     // register
-    public int register (String username, String password) {
+    public synchronized int register (String username, String password) {
 
         // invalid password
         if (!isValid(password, 8, 20))
@@ -48,7 +48,7 @@ public class UserManager {
         return 100;
     }
 
-    public int updateCredentials (String username, String newPwd, String oldPwd) {
+    public synchronized int updateCredentials (String username, String newPwd, String oldPwd) {
 
         User user = this.users.get(username);
 
@@ -80,7 +80,7 @@ public class UserManager {
         return 100;
     }
 
-    public int login (String username, String password) {
+    public synchronized int login (String username, String password) {
 
         // invalid password ??
         if (!isValid(password, 8, 20))
@@ -103,7 +103,7 @@ public class UserManager {
         return 100;
     }
 
-    public int logout (String username) {
+    public synchronized int logout (String username) {
 
         User user = this.users.get(username);
 

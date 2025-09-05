@@ -119,7 +119,7 @@ public class ServerMain {
 
                     ClientHandler handler = new ClientHandler(clientSocket, userManager, orderBook, tradeMap, udpNotifier, inactivityHandler);
 
-                    activeClients.put(clientSocket, handler);
+                    addActiveClient(clientSocket, handler);
 
                     pool.execute(handler);
 
@@ -256,6 +256,14 @@ public class ServerMain {
             System.err.println("error reading order book file: " + e.getMessage());
             orderBook = new OrderBook();
         }  
+    }
+
+    public static synchronized void addActiveClient (Socket socket, ClientHandler handler) {
+        activeClients.put(socket, handler);
+    }
+
+    public static synchronized void removeActiveClient (Socket socket) {
+        activeClients.remove(socket);
     }
 
     public void closeServer () {

@@ -125,273 +125,282 @@ public class ClientHandler implements Runnable {
 
     // process request with json
     public Response handleRequest (String request) {
-
-        Gson gson = new Gson();
-
-        JsonObject obj = JsonParser.parseString(request).getAsJsonObject();
-
-        String op = obj.get("operation").getAsString();
-
         Response response = null;
-        int code = -1;
-        String msg = "";
 
-        switch (op) {
-            case "register":
-                UserValues userVal = gson.fromJson(obj.get("values"), UserValues.class);
+        try {
+            JsonObject obj = JsonParser.parseString(request).getAsJsonObject();
 
-                if (this.user != null && this.user.getLogged())
-                    return new UserResponse("register", 103, "user already logged in");
+            String op = obj.get("operation").getAsString();
 
-                code = userManager.register(userVal.getUsername(), userVal.getPassword());
+            
+            int code = -1;
+            String msg = "";
 
-                if (code == 100) {
-                    msg = "OK";
+            switch (op) {
+                case "register":
+                    UserValues userVal = gson.fromJson(obj.get("values"), UserValues.class);
 
-                    System.out.println("user " + userVal.getUsername() + " registered");
-                }
-                else if (code == 101)
-                    msg = "invalid password";
-                else if (code == 102)
-                    msg = "username not available";
-                else if (code == 103)
-                    msg = "invalid username";
-                
-                updateLastActivityTime();
+                    if (this.user != null && this.user.getLogged())
+                        return new UserResponse("register", 103, "user already logged in");
 
-                response = new UserResponse("register", code, msg);
+                    code = userManager.register(userVal.getUsername(), userVal.getPassword());
 
-            break;
+                    if (code == 100) {
+                        msg = "OK";
 
-            case "updateCredentials":
-                userVal = gson.fromJson(obj.get("values"), UserValues.class);
+                        System.out.println("user " + userVal.getUsername() + " registered");
+                    }
+                    else if (code == 101)
+                        msg = "invalid password";
+                    else if (code == 102)
+                        msg = "username not available";
+                    else if (code == 103)
+                        msg = "invalid username";
+                    
+                    updateLastActivityTime();
 
-                if (this.user.getLogged())
-                    return new UserResponse("updateCredentials", 104, "user currently logged");
+                    response = new UserResponse("register", code, msg);
 
-                if (userManager.getUser(userVal.getUsername()) == null)
-                    return new UserResponse("updateCredentials", 102, "non existent username");
+                break;
 
-                code = userManager.updateCredentials(userVal.getUsername(), userVal.getNewPassword(), userVal.getPassword());
+                case "updateCredentials":
+                    userVal = gson.fromJson(obj.get("values"), UserValues.class);
 
-                if (code == 100) {
-                    msg = "OK";
+                    if (this.user.getLogged())
+                        return new UserResponse("updateCredentials", 104, "user currently logged");
 
-                    System.out.println("user " + userVal.getUsername() + " updated credentials");
-                }
-                else if (code == 101)
-                    msg = "invalid new password";
-                else if (code == 102)
-                    msg = "old password mismatch";
-                else if (code == 103)
-                    msg = "new passord equal to old one";
+                    if (userManager.getUser(userVal.getUsername()) == null)
+                        return new UserResponse("updateCredentials", 102, "non existent username");
 
-                updateLastActivityTime();
+                    code = userManager.updateCredentials(userVal.getUsername(), userVal.getNewPassword(), userVal.getPassword());
 
-                response = new UserResponse("updateCredentials", code, msg);
+                    if (code == 100) {
+                        msg = "OK";
 
-            break;
-
-            case "login":
-                userVal = gson.fromJson(obj.get("values"), UserValues.class);
-
-                if (this.user.getLogged())
-                    return new UserResponse("login", 102, "user already logged in");
-
-                if (userManager.getUser(userVal.getUsername()) == null)
-                    return new UserResponse("login", 101, "non existent username");
-                
-                if (userVal.getNetworkValues() == null || userVal.getNetworkValues().getPort() <= 1024)
-                    return new UserResponse("login", 104, "invalid network values");
-
-                code = userManager.login(userVal.getUsername(), userVal.getPassword());
-
-                if (code == 100) {
-                    msg = "OK";
-
-                    // register client for udp notifications
-                    udpPort = userVal.getNetworkValues().getPort();
-                    udpNotifier.registerClient(userVal.getUsername(), clientSocket.getInetAddress(), udpPort);
-
-                    // set client handler user
-                    this.user = userManager.getUser(userVal.getUsername());
-                    this.user.setLogged(true);
+                        System.out.println("user " + userVal.getUsername() + " updated credentials");
+                    }
+                    else if (code == 101)
+                        msg = "invalid new password";
+                    else if (code == 102)
+                        msg = "old password mismatch";
+                    else if (code == 103)
+                        msg = "new passord equal to old one";
 
                     updateLastActivityTime();
 
-                    System.out.println("user " + this.user.getUsername() + " logged in");
-                }  
-                else if (code == 101)
-                    msg = "password mismatch";
-                else if (code == 102)
-                    msg = "user already logged in";
-                else if (code == 103)
-                    msg = "invalid password";
+                    response = new UserResponse("updateCredentials", code, msg);
 
-                response = new UserResponse("login", code, msg);
+                break;
 
-            break;
+                case "login":
+                    userVal = gson.fromJson(obj.get("values"), UserValues.class);
 
-            case "logout":
-                if (this.user == null)
-                    return new UserResponse("logout", 101, "user error");
+                    if (this.user.getLogged())
+                        return new UserResponse("login", 102, "user already logged in");
 
-                if (this.user.getLogged() == false)
-                    return new UserResponse("logout", 101, "user not logged in");
-
-                userVal = gson.fromJson(obj.get("values"), UserValues.class);
-
-                if (userManager.getUser(userVal.getUsername()) == null)
-                    return new UserResponse("logout", 101, "user not found");
-
-                code = userManager.logout(this.user.getUsername());
-
-                if (code == 100) {
-                    msg = "OK";
-
-                    // unregister client from udp notifications
-                    udpNotifier.removeClient(this.user.getUsername());
-                    this.user.setLogged(false);
-                    this.user = null;
-
-                    System.out.println("user logged out");
-                }
-
-                response = new UserResponse("logout", code, msg);
-            
-            break;
-
-            case "insertLimitOrder":
-                if (this.user == null)
-                    return new UserResponse("insertLimitOrder", 101, "user error");
-
-                if (this.user.getLogged() == false)
-                    return new UserResponse("insertLimitOrder", 102, "you can't insert orders if not logged in");
-                
-                OrderValues orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
-
-                if (!isValidSize(orderVal.getSize()))
-                    return new UserResponse("insertLimitOrder", 103, "invalid order values: size exceeds limits");
-
-                if (!isValidPrice(orderVal.getPrice()))
-                    return new UserResponse("insertLimitOrder", 103, "invalid order values: price exceeds limits");
-
-                code = orderBook.execLimitOrder(this.user.getUsername(), orderVal.getType(), orderVal.getSize(), orderVal.getPrice());
-
-                if (code == -1) {
-                    System.out.println("error with limit order inserted by user " + this.user.getUsername());
-                }
-
-                response = new OrderResponse(code);
-            break;
-
-            case "insertMarketOrder":
-                if (this.user == null)
-                    return new UserResponse("insertMarketOrder", 101, "user error");
-
-                if (this.user.getLogged() == false)
-                    return new UserResponse("insertMarketOrder", 102, "you can't insert orders if not logged in");
-                
-                orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
-
-                if (!isValidSize(orderVal.getSize()))
-                    return new UserResponse("insertMarketOrder", 103, "invalid order values: size exceeds limits");
-
-                if (!isValidPrice(orderVal.getPrice()))
-                    return new UserResponse("insertMarketOrder", 103, "invalid order values: price exceeds limits");
-
-                code = orderBook.execMarketOrder(orderVal.getSize(), orderVal.getType(), "market", this.user.getUsername(), -1);
-
-                if (code == -1) {
-                    System.out.println("market order inserted by user " + this.user.getUsername() + "cannot be executed");
-                }
-
-                response = new OrderResponse(code);
-
-            break;
-
-            case "insertStopOrder":
-                if (this.user == null)
-                    return new UserResponse("insertStopOrder", 101, "user error");
-
-                if (this.user.getLogged() == false)
-                    return new UserResponse("insertStopOrder", 102, "you can't insert orders if not logged in");
-                
-                orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
-
-                if (!isValidSize(orderVal.getSize()))
-                    return new UserResponse("insertStopOrders", 103, "invalid order values: size exceeds limits");
-
-                if (!isValidPrice(orderVal.getPrice()))
-                    return new UserResponse("insertStopOrders", 103, "invalid order values: price exceeds limits");
-
-                code = orderBook.addStopOrder(this.user.getUsername(), orderVal.getSize(), orderVal.getPrice(), orderVal.getType());
-
-                if (code == -1) {
-                    System.out.println("error with stop order inserted by user " + this.user.getUsername());
-                }
-
-                response = new OrderResponse(code);
-
-            break;
-
-            case "cancelOrder":
-                if (this.user == null)
-                    return new UserResponse("cancelOrder", 101, "user error");
-                
-                if (this.user.getLogged() == false)
-                    return new UserResponse("cancelOrder", 102, "you can't cancel orders if not logged in");
-
-                int orderID = obj.get("orderID").getAsInt();
-
-                code = orderBook.cancelOrder(orderID, this.user.getUsername());
-
-                if (code == 100) {
-                    msg = "OK";
-                    System.out.println("order with ID: " + orderID + " cancelled by user " + this.user.getUsername());
-                }
-                else if (code == 101) {
-                    msg = "order does not exist";
-                }
-
-                response = new UserResponse("cancelOrder", code, msg);
-            break;
-
-            case "getOrderBook":
-                if (this.user == null)
-                    return new UserResponse("getOrderBook", 101, "user error");
-
-                // anyone can get order book
-
-                OrderBook ob = orderBook.getOrderBook();
-                
-                response = new OrderBookResponse(ob);
-            break;
-
-            case "getPriceHistory":
-                if (this.user == null)
-                    return new UserResponse("getPriceHistory", 101, "user error");
-
-                if (this.user.getLogged() == false)
-                    return new UserResponse("getPriceHistory", 102, "you can't get price history if not logged in");
-
-                HistoryValues historyVal = gson.fromJson(obj.get("values"), HistoryValues.class);
-
-                int months = historyVal.getMonth();
-                int year = historyVal.getYear();  
-
-                if (months < 1 || months > 12)
-                    return new UserResponse("getPriceHistory", 103, "invalid month");
+                    if (userManager.getUser(userVal.getUsername()) == null)
+                        return new UserResponse("login", 101, "non existent username");
                     
-                if (year < 1970 || year > Year.now().getValue())
-                    return new UserResponse("getPriceHistory", 104, "invalid year");
+                    if (userVal.getNetworkValues() == null || userVal.getNetworkValues().getPort() <= 1024)
+                        return new UserResponse("login", 104, "invalid network values");
 
-                response = new HistoryResponse(YearMonth.of(year, months), priceHistory.getPriceHistory(YearMonth.of(year, months), tradeMap));
-            break;
+                    code = userManager.login(userVal.getUsername(), userVal.getPassword());
 
-            default:
-                response = new UserResponse("unknown", 101, "unknown operation");
-            break;
+                    if (code == 100) {
+                        msg = "OK";
+
+                        // register client for udp notifications
+                        udpPort = userVal.getNetworkValues().getPort();
+                        udpNotifier.registerClient(userVal.getUsername(), clientSocket.getInetAddress(), udpPort);
+
+                        // set client handler user
+                        this.user = userManager.getUser(userVal.getUsername());
+                        this.user.setLogged(true);
+
+                        updateLastActivityTime();
+
+                        System.out.println("user " + this.user.getUsername() + " logged in");
+                    }  
+                    else if (code == 101)
+                        msg = "password mismatch";
+                    else if (code == 102)
+                        msg = "user already logged in";
+                    else if (code == 103)
+                        msg = "invalid password";
+
+                    response = new UserResponse("login", code, msg);
+
+                break;
+
+                case "logout":
+                    if (this.user == null)
+                        return new UserResponse("logout", 101, "user error");
+
+                    if (this.user.getLogged() == false)
+                        return new UserResponse("logout", 101, "user not logged in");
+
+                    userVal = gson.fromJson(obj.get("values"), UserValues.class);
+
+                    if (userManager.getUser(userVal.getUsername()) == null)
+                        return new UserResponse("logout", 101, "user not found");
+
+                    code = userManager.logout(this.user.getUsername());
+
+                    if (code == 100) {
+                        msg = "OK";
+
+                        // unregister client from udp notifications
+                        udpNotifier.removeClient(this.user.getUsername());
+                        this.user.setLogged(false);
+                        this.user = null;
+
+                        System.out.println("user logged out");
+                    }
+
+                    response = new UserResponse("logout", code, msg);
+                
+                break;
+
+                case "insertLimitOrder":
+                    if (this.user == null)
+                        return new UserResponse("insertLimitOrder", 101, "user error");
+
+                    if (this.user.getLogged() == false)
+                        return new UserResponse("insertLimitOrder", 102, "you can't insert orders if not logged in");
+                    
+                    OrderValues orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
+
+                    if (!isValidSize(orderVal.getSize()))
+                        return new UserResponse("insertLimitOrder", 103, "invalid order values: size exceeds limits");
+
+                    if (!isValidPrice(orderVal.getPrice()))
+                        return new UserResponse("insertLimitOrder", 103, "invalid order values: price exceeds limits");
+
+                    code = orderBook.execLimitOrder(this.user.getUsername(), orderVal.getType(), orderVal.getSize(), orderVal.getPrice());
+
+                    if (code == -1) {
+                        System.out.println("error with limit order inserted by user " + this.user.getUsername());
+                    }
+
+                    response = new OrderResponse(code);
+                break;
+
+                case "insertMarketOrder":
+                    if (this.user == null)
+                        return new UserResponse("insertMarketOrder", 101, "user error");
+
+                    if (this.user.getLogged() == false)
+                        return new UserResponse("insertMarketOrder", 102, "you can't insert orders if not logged in");
+                    
+                    orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
+
+                    if (!isValidSize(orderVal.getSize()))
+                        return new UserResponse("insertMarketOrder", 103, "invalid order values: size exceeds limits");
+
+                    if (!isValidPrice(orderVal.getPrice()))
+                        return new UserResponse("insertMarketOrder", 103, "invalid order values: price exceeds limits");
+
+                    code = orderBook.execMarketOrder(orderVal.getSize(), orderVal.getType(), "market", this.user.getUsername(), -1);
+
+                    if (code == -1) {
+                        System.out.println("market order inserted by user " + this.user.getUsername() + "cannot be executed");
+                    }
+
+                    response = new OrderResponse(code);
+
+                break;
+
+                case "insertStopOrder":
+                    if (this.user == null)
+                        return new UserResponse("insertStopOrder", 101, "user error");
+
+                    if (this.user.getLogged() == false)
+                        return new UserResponse("insertStopOrder", 102, "you can't insert orders if not logged in");
+                    
+                    orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
+
+                    if (!isValidSize(orderVal.getSize()))
+                        return new UserResponse("insertStopOrders", 103, "invalid order values: size exceeds limits");
+
+                    if (!isValidPrice(orderVal.getPrice()))
+                        return new UserResponse("insertStopOrders", 103, "invalid order values: price exceeds limits");
+
+                    code = orderBook.addStopOrder(this.user.getUsername(), orderVal.getSize(), orderVal.getPrice(), orderVal.getType());
+
+                    if (code == -1) {
+                        System.out.println("error with stop order inserted by user " + this.user.getUsername());
+                    }
+
+                    response = new OrderResponse(code);
+
+                break;
+
+                case "cancelOrder":
+                    if (this.user == null)
+                        return new UserResponse("cancelOrder", 101, "user error");
+                    
+                    if (this.user.getLogged() == false)
+                        return new UserResponse("cancelOrder", 102, "you can't cancel orders if not logged in");
+
+                    int orderID = obj.get("orderID").getAsInt();
+
+                    code = orderBook.cancelOrder(orderID, this.user.getUsername());
+
+                    if (code == 100) {
+                        msg = "OK";
+                        System.out.println("order with ID: " + orderID + " cancelled by user " + this.user.getUsername());
+                    }
+                    else if (code == 101) {
+                        msg = "order does not exist";
+                    }
+
+                    response = new UserResponse("cancelOrder", code, msg);
+                break;
+
+                case "getOrderBook":
+                    if (this.user == null)
+                        return new UserResponse("getOrderBook", 101, "user error");
+
+                    // anyone can get order book
+
+                    OrderBook ob = orderBook.getOrderBook();
+                    
+                    response = new OrderBookResponse(ob);
+                break;
+
+                case "getPriceHistory":
+                    if (this.user == null)
+                        return new UserResponse("getPriceHistory", 101, "user error");
+
+                    if (this.user.getLogged() == false)
+                        return new UserResponse("getPriceHistory", 102, "you can't get price history if not logged in");
+
+                    HistoryValues historyVal = gson.fromJson(obj.get("values"), HistoryValues.class);
+
+                    int months = historyVal.getMonth();
+                    int year = historyVal.getYear();  
+
+                    if (months < 1 || months > 12)
+                        return new UserResponse("getPriceHistory", 103, "invalid month");
+                        
+                    if (year < 1970 || year > Year.now().getValue())
+                        return new UserResponse("getPriceHistory", 104, "invalid year");
+
+                    response = new HistoryResponse(YearMonth.of(year, months), priceHistory.getPriceHistory(YearMonth.of(year, months), tradeMap));
+                break;
+
+                default:
+                    response = new UserResponse("unknown", 101, "unknown operation");
+                break;
+            }
+        }
+        catch (JsonSyntaxException e) {
+            System.err.println(e.getMessage());
+            return new UserResponse("error", -1, "json error");
+        }
+        catch (Exception e) {
+            System.err.println(e.getMessage());
+            return new UserResponse("error", -1, "server error");
         }
 
         return response;

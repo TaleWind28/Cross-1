@@ -54,7 +54,7 @@ public class InactivityHandler implements Runnable {
         }
     }
 
-    public void handleTimeout (Socket socket, ClientHandler handler) {
+    public synchronized void handleTimeout (Socket socket, ClientHandler handler) {
         try {
             if (!handler.isLoggedIn()) {
                 System.out.println("not logged inactive client");
@@ -86,7 +86,7 @@ public class InactivityHandler implements Runnable {
         }
     }
 
-    public boolean hasStopOrders (String username) {
+    public synchronized boolean hasStopOrders (String username) {
         ConcurrentLinkedQueue<StopOrder> userStopOrders = orderBook.getUserStopOrders(username);
         
         if (userStopOrders != null && !userStopOrders.isEmpty())

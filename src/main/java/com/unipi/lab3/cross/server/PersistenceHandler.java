@@ -27,7 +27,7 @@ public class PersistenceHandler {
         this.bufferedTrades = bufferedTrades;
     }
 
-    public void saveAll () {
+    public synchronized void saveAll () {
         saveUsers();
         saveOrders();
         saveTrades();
@@ -49,7 +49,7 @@ public class PersistenceHandler {
         }
     }
 
-    private void saveTrades() {
+    private synchronized void saveTrades() {
         if (bufferedTrades.isEmpty()) return;
 
         try (FileWriter writer = new FileWriter(tradesFile, true)) { // append

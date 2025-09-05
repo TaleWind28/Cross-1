@@ -20,7 +20,7 @@ public class TradeMap {
         return this.dailyTrades;
     }
 
-    public LinkedList<Trade> getTradesByDate(LocalDate date) {
+    public synchronized LinkedList<Trade> getTradesByDate(LocalDate date) {
         if (!this.dailyTrades.containsKey(date)) {
             return new LinkedList<>();
         }
@@ -28,7 +28,7 @@ public class TradeMap {
         return this.dailyTrades.get(date);
     }
 
-    public Trade getTrade (int tradeId) {
+    public synchronized Trade getTrade (int tradeId) {
         for (Map.Entry<LocalDate, LinkedList<Trade>> entry : this.dailyTrades.entrySet()) {
             for (Trade trade : entry.getValue()) {
                 if (trade.getOrderId() == tradeId) {
@@ -40,7 +40,7 @@ public class TradeMap {
         return null;
     }
 
-    public void addTrade(LocalDate date, Trade trade) {
+    public synchronized void addTrade(LocalDate date, Trade trade) {
         if (!this.dailyTrades.containsKey(date)) {
             LinkedList<Trade> trades = new LinkedList<>();
             trades.addFirst(trade);

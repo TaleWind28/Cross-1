@@ -3,6 +3,7 @@ package com.unipi.lab3.cross.model;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
@@ -42,7 +43,7 @@ public class OrderBook {
 
     public OrderBook () {
         this.askOrders = new ConcurrentSkipListMap<>();
-        this.bidOrders = new ConcurrentSkipListMap<>();
+        this.bidOrders = new ConcurrentSkipListMap<>(Comparator.reverseOrder());
         this.spread = -1;
         this.bestAskPrice = 0;
         this.bestBidPrice = 0;
@@ -61,7 +62,7 @@ public class OrderBook {
         this.stopBids = stopBids;
 
         this.tradeMap = tradeMap;
-        this.bufferedTrades = bufferedTrades;
+        this.bufferedTrades = new LinkedList<>();
         
         this.udpNotifier = notifier;
 
@@ -154,7 +155,7 @@ public class OrderBook {
         return availableSize;
     }
  
-    private void updateBestPrices () {
+    private synchronized void updateBestPrices () {
         int oldAsk = this.bestAskPrice;
         int oldBid = this.bestBidPrice;
         
@@ -177,7 +178,7 @@ public class OrderBook {
         }
     }
 
-    public ConcurrentLinkedQueue<StopOrder> getUserStopOrders (String username) {
+    public synchronized ConcurrentLinkedQueue<StopOrder> getUserStopOrders (String username) {
         ConcurrentLinkedQueue<StopOrder> userStopOrders = new ConcurrentLinkedQueue<>();
 
         for (StopOrder order : this.stopAsks) {
@@ -208,7 +209,7 @@ public class OrderBook {
     }
 
     // methods for execute a limit order
-    public int execLimitOrder (String username, String type, int size, int price) {
+    public synchronized int execLimitOrder (String username, String type, int size, int price) {
 
         // check the type of the order
         if (type.equals("ask")) {
@@ -222,7 +223,7 @@ public class OrderBook {
     }
 
     // ask order
-    public int execAskOrder (String username, int size, int price) {
+    public synchronized int execAskOrder (String username, int size, int price) {
 
         // create new order id
         int orderId = counterOrderId(); // generate unique order id
@@ -259,6 +260,8 @@ public class OrderBook {
             // when fully executed, add to trade map
             insertTrade(orderId, "ask", "limit", size, price, LocalDate.now(), username);
 
+            System.out.println("order " + orderId + " fully executed");
+
             // order fully executed
             return orderId;
         }
@@ -268,9 +271,11 @@ public class OrderBook {
 
             if (newSize == size) {
                 // order not matched
+                System.out.println("order " + orderId + " not matched");
             }
             else {
                 // order partially executed
+                System.out.println("order " + orderId + " partially executed");
             }
             addLimitOrder(orderId, "ask", username, newSize, price);
         }
@@ -279,7 +284,7 @@ public class OrderBook {
     }
 
     // bid order
-    public int execBidOrder (String username, int size, int price) {
+    public synchronized int execBidOrder (String username, int size, int price) {
         // create new order id
         int orderId = counterOrderId(); // generate unique order id
 
@@ -315,6 +320,8 @@ public class OrderBook {
             // when fully executed, add to trade map
             insertTrade(orderId, "bid", "limit", size, price, LocalDate.now(), username);
 
+            System.out.println("order " + orderId + " fully executed");
+
             // order fully executed
             return orderId;
         }
@@ -324,9 +331,11 @@ public class OrderBook {
 
             if (newSize == size) {
                 // order not matched
+                System.out.println("order " + orderId + " not matched");
             }
             else {
                 // order partially executed
+                System.out.println("order " + orderId + " partially executed");
             }
 
             addLimitOrder(orderId, "bid", username, newSize, price);
@@ -335,7 +344,7 @@ public class OrderBook {
         return orderId;
     }
 
-    public int matchingAlgorithm (OrderGroup group, ConcurrentLinkedQueue<LimitOrder> orders, int size, String username) {
+    public synchronized int matchingAlgorithm (OrderGroup group, ConcurrentLinkedQueue<LimitOrder> orders, int size, String username) {
 
         // check in the order group
         Iterator<LimitOrder> iterator = orders.iterator();
@@ -355,6 +364,8 @@ public class OrderBook {
                     // add the opposite order to the trade map
                     insertTrade(order.getOrderId(), order.getType(), "limit", orderSize, orderPrice, LocalDate.now(), order.getUsername());
 
+                    System.out.println("order " + order.getOrderId() + " fully executed");
+
                     // remove the opposite order from the group
                     iterator.remove();
                             
@@ -366,6 +377,8 @@ public class OrderBook {
 
                     // add the opposite order to the trade map
                     insertTrade(order.getOrderId(), order.getType(), "limit", orderSize, orderPrice, LocalDate.now(), order.getUsername());
+
+                    System.out.println("order " + order.getOrderId() + " fully executed");
 
                     // remove the opposite order from the group
                     iterator.remove();
@@ -379,6 +392,8 @@ public class OrderBook {
                     
                     group.updateGroup(size, orderPrice);
 
+                    System.out.println("order " + order.getOrderId() + " partially executed");
+
                     // order fully executed
                     return 0;
                 }
@@ -389,7 +404,7 @@ public class OrderBook {
     }
 
     // method to add a limit order
-    public void addLimitOrder (int orderId, String username, String type, int size, int price) {
+    public synchronized void addLimitOrder (int orderId, String username, String type, int size, int price) {
         // create a new LimitOrder object
         LimitOrder order = new LimitOrder(orderId, username, type, size, price);
 
@@ -416,7 +431,7 @@ public class OrderBook {
     }
 
     // method to add a stop order
-    public int addStopOrder (String username, int size, int price, String type) {
+    public synchronized int addStopOrder (String username, int size, int price, String type) {
         // create new order id
         int orderId = counterOrderId(); // generate unique order id
 
@@ -432,7 +447,7 @@ public class OrderBook {
     }
 
     // periodic check to match stop orders, executed when spread and best prices change
-    public void execStopOrders () {
+    public synchronized void execStopOrders () {
         // check stop asks with bid map
         // bestAskPrice is the lowest ask price
         // stopAsks active when bestBidPrice <= stopAskPrice
@@ -450,6 +465,7 @@ public class OrderBook {
 
                 if (result == order.getOrderId()) {
                     // order executed successfully
+                    System.out.println("stop order " + order.getOrderId() + " executed");
 
                     // when fully executed, add to trade map
                     insertTrade(order.getOrderId(), "ask", "stop", order.getSize(), order.getStopPrice(), LocalDate.now(), order.getUsername());
@@ -459,6 +475,7 @@ public class OrderBook {
                 }
                 else {
                     // order not executed
+                    System.out.println("error! stop order " + order.getOrderId() + " not executed");
 
                     askIterator.remove();
                 }
@@ -479,6 +496,7 @@ public class OrderBook {
 
                 if (result == order.getOrderId()) {
                     // order executed successfully
+                    System.out.println("stop order " + order.getOrderId() + " executed");
 
                     // when fully executed, add to trade map
                     insertTrade(order.getOrderId(), "bid", "stop", order.getSize(), order.getStopPrice(), LocalDate.now(), order.getUsername());
@@ -488,6 +506,7 @@ public class OrderBook {
                 }
                 else {
                     // order not executed
+                    System.out.println("error! stop order " + order.getOrderId() + " not executed");
 
                     bidIterator.remove(); // remove stop order from the queue
                 }
@@ -497,7 +516,7 @@ public class OrderBook {
 
     }
 
-    public int execMarketOrder (int size, String type, String orderType, String username, int id) {
+    public synchronized int execMarketOrder (int size, String type, String orderType, String username, int id) {
 
         int orderId = 0;
         
@@ -543,6 +562,8 @@ public class OrderBook {
 
             updateBestPrices();
 
+            System.out.println("market order " + orderId + " fully executed");
+
             // when fully executed, add to trade map
             if (type.equals("ask"))
                 insertTrade(orderId, "ask", "market", size, 0, LocalDate.now(), username); 
@@ -552,12 +573,14 @@ public class OrderBook {
             return orderId;
         }
      
+        System.out.println("market order " + orderId + " failed");
+
         // failed order
         return -1;
     }
 
     // method for removing an order
-    public int cancelOrder (int orderId, String username) {
+    public synchronized int cancelOrder (int orderId, String username) {
 
         // check if the order is in the ask map
         Iterator<OrderGroup> askIterator = this.askOrders.values().iterator();
@@ -572,6 +595,8 @@ public class OrderBook {
                 }
 
                 updateBestPrices();
+
+                System.out.println("ask order " + orderId + " removed");
 
                 // if the order has been removed successfully, return 100
                 return 100;
@@ -591,6 +616,9 @@ public class OrderBook {
                 }
 
                 updateBestPrices();
+
+                System.out.println("bid order " + orderId + " removed");
+
                 return 100;
             }
         }
@@ -607,6 +635,8 @@ public class OrderBook {
 
                 updateBestPrices();
 
+                System.out.println("stop order " + orderId + " removed");
+
                 return 100; // success
             }
         }
@@ -621,6 +651,8 @@ public class OrderBook {
 
                 updateBestPrices();
 
+                System.out.println("stop order " + orderId + " removed");
+
                 return 100;
             }
         }
@@ -629,7 +661,7 @@ public class OrderBook {
         return 101;
     }
 
-    public void insertTrade (int tradeID, String type, String orderType, int size, int price, LocalDate date, String username) {
+    public synchronized void insertTrade (int tradeID, String type, String orderType, int size, int price, LocalDate date, String username) {
         Trade trade;
 
         if (price == 0)
@@ -648,7 +680,7 @@ public class OrderBook {
         this.udpNotifier.notifyClient(username, new Notification(trades));
     }
 
-    public void printOrderBook () {
+    public synchronized void printOrderBook () {
         System.out.println("\n-------------------------------------------------------");
         System.out.println("                  ORDER BOOK");
         System.out.println("-------------------------------------------------------");

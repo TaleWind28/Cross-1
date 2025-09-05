@@ -10,7 +10,7 @@ public class PriceHistory {
 
     public PriceHistory () {}
 
-    public ArrayList<DailyTradingStats> getPriceHistory (YearMonth date, TradeMap map) {
+    public synchronized ArrayList<DailyTradingStats> getPriceHistory (YearMonth date, TradeMap map) {
 
         ArrayList<DailyTradingStats> history = new ArrayList<>();
 
@@ -28,7 +28,7 @@ public class PriceHistory {
         return history;
     }
 
-    public DailyTradingStats calculateDailyTradingStats (LocalDate date, TradeMap map) {
+    public synchronized DailyTradingStats calculateDailyTradingStats (LocalDate date, TradeMap map) {
         LinkedList<Trade> trades = map.getTradesByDate(date);
 
         LinkedList<Trade> sortedTrades = new LinkedList<>(trades);

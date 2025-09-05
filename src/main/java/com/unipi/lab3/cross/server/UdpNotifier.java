@@ -40,7 +40,7 @@ public class UdpNotifier {
         this.udpClients.remove(username);
     }
 
-    public void notifyClient (String username, Notification notification) {
+    public synchronized void notifyClient (String username, Notification notification) {
         // check if this username is registered
         if (!this.udpClients.containsKey(username))
             return;
