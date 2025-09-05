@@ -19,6 +19,8 @@ public class OrderBook {
     // map price - list ask limit orders
     // ascending order for keys
     private ConcurrentSkipListMap<Integer, OrderGroup> askOrders;
+
+    private int spread;
     
     // map price - list bid limit orders
     // descending order for keys
@@ -28,10 +30,8 @@ public class OrderBook {
     private ConcurrentLinkedQueue<StopOrder> stopAsks;
     private ConcurrentLinkedQueue<StopOrder> stopBids;
 
-    private int spread;
-
-    private int bestAskPrice;
-    private int bestBidPrice;
+    private transient int bestAskPrice;
+    private transient int bestBidPrice;
 
     private transient static final AtomicInteger idCounter = new AtomicInteger(100);
 
@@ -49,23 +49,19 @@ public class OrderBook {
         this.stopAsks = new ConcurrentLinkedQueue<>();
         this.stopBids = new ConcurrentLinkedQueue<>();
 
-        this.tradeMap = new TradeMap();
-        this.bufferedTrades = new LinkedList<>();
+        // trade map & trades
 
-        this.udpNotifier = null; // to be set later
+        this.udpNotifier = null;
     }
 
-    public OrderBook (ConcurrentSkipListMap<Integer, OrderGroup> askOrders, ConcurrentSkipListMap<Integer, OrderGroup> bidOrders, int spread, int bestAskPrice, int bestBidPrice, UdpNotifier notifier) {
+    public OrderBook (ConcurrentSkipListMap<Integer, OrderGroup> askOrders, ConcurrentSkipListMap<Integer, OrderGroup> bidOrders, ConcurrentLinkedQueue<StopOrder> stopAsks, ConcurrentLinkedQueue<StopOrder> stopBids, UdpNotifier notifier, TradeMap tradeMap) {
         this.askOrders = askOrders;
         this.bidOrders = bidOrders;
-        this.spread = spread;
-        this.bestAskPrice = bestAskPrice;
-        this.bestBidPrice = bestBidPrice;
-        this.stopAsks = new ConcurrentLinkedQueue<>();
-        this.stopBids = new ConcurrentLinkedQueue<>();
+        this.stopAsks = stopAsks;
+        this.stopBids = stopBids;
 
         this.tradeMap = tradeMap;
-        this.bufferedTrades = new LinkedList<>();
+        this.bufferedTrades = bufferedTrades;
         
         this.udpNotifier = notifier;
 
@@ -76,20 +72,42 @@ public class OrderBook {
         return this.askOrders;
     }
 
+    public void setAskOrders (ConcurrentSkipListMap<Integer, OrderGroup> askOrders) {
+        this.askOrders = askOrders;
+        updateBestPrices();
+    }
+
     public ConcurrentSkipListMap<Integer, OrderGroup> getLimitBids () {
         return this.bidOrders;
+    }
+
+    public void setBidOrders (ConcurrentSkipListMap<Integer, OrderGroup> bidOrders) {
+        this.bidOrders = bidOrders;
+        updateBestPrices();
+    }
+
+    public int getSpread () {
+        return this.spread;
     }
 
     public ConcurrentLinkedQueue<StopOrder> getStopAsks () {
         return this.stopAsks;
     }
 
+    public void setStopAsks (ConcurrentLinkedQueue<StopOrder> stopAsks) {
+        this.stopAsks = stopAsks;
+    }
+
     public ConcurrentLinkedQueue<StopOrder> getStopBids () {
         return this.stopBids;
     }
 
-    public int getSpread () {
-        return this.spread;
+    public void setStopBids (ConcurrentLinkedQueue<StopOrder> stopBids) {
+        this.stopBids = stopBids;
+    }
+
+    public OrderBook getOrderBook () {
+        return this;
     }
 
     public int getBestAskPrice () {
@@ -175,6 +193,18 @@ public class OrderBook {
         }
 
         return userStopOrders;
+    }
+
+    public void setTradeMap (TradeMap tradeMap) {
+        this.tradeMap = tradeMap;
+    }
+
+    public void setBufferedTrades (LinkedList<Trade> trades) {
+        this.bufferedTrades = trades;
+    }
+
+    public void setUdpNotifier (UdpNotifier notifier) {
+        this.udpNotifier = notifier;
     }
 
     // methods for execute a limit order
@@ -619,22 +649,88 @@ public class OrderBook {
     }
 
     public void printOrderBook () {
-        System.out.println("Asks:");
-        for (Map.Entry<Integer, OrderGroup> entry : this.askOrders.entrySet()) {
-            Integer price = entry.getKey();
-            OrderGroup group = entry.getValue();
-
-            System.out.println("Price: " + price + ", Size: " + group.getSize() + ", Total: " + group.getTotal());
+        System.out.println("\n-------------------------------------------------------");
+        System.out.println("                  ORDER BOOK");
+        System.out.println("-------------------------------------------------------");
+            
+        if (this.askOrders.isEmpty() && this.bidOrders.isEmpty() && this.stopAsks.isEmpty() && this.stopBids.isEmpty()) {
+            System.out.println("Empty Order Book!");
+            System.out.println("-------------------------------------------------------\n");
+            return;
         }
 
-        System.out.println("Spread: " + this.spread);
-
-        System.out.println("Bids:");
-        for (Map.Entry<Integer, OrderGroup> entry : this.bidOrders.entrySet()) {
-            Integer price = entry.getKey();
-            OrderGroup group = entry.getValue();
-
-            System.out.println("Price: " + price + ", Size: " + group.getSize() + ", Total: " + group.getTotal());
+        if (this.askOrders.isEmpty()) {
+            System.out.println("No ask orders");
         }
+        else {
+            System.out.println("ASKS:");
+            System.out.printf("%-12s %-15s %-15s%n", "Price (USD)", "Size (BTC)", "Total");
+            for (ConcurrentSkipListMap.Entry<Integer, OrderGroup> entry : this.askOrders.entrySet()) {
+                int price = entry.getKey();
+                OrderGroup orderGroup = entry.getValue();
+                
+                System.out.printf("%-12.2f %-15.6f %-15.2f%n", price/1000, orderGroup.getSize()/1000, orderGroup.getTotal()/1000000);
+            }
+        }
+            
+        System.out.println("-------------------------------------------------------");
+        if (this.spread >= 0)
+            System.out.println("SPREAD: " + this.spread);
+        else
+            System.out.println("");
+
+        System.out.println("-------------------------------------------------------");
+
+        if (this.bidOrders.isEmpty()) {
+            System.out.println("No bid orders");
+        }
+        else {
+            System.out.println("BIDS:");
+            System.out.printf("%-12s %-15s %-15s%n", "Price (USD)", "Size (BTC)", "Total");
+            System.out.println("-------------------------------------------------------");
+            for (ConcurrentSkipListMap.Entry<Integer, OrderGroup> entry : this.bidOrders.entrySet()) {
+                int price = entry.getKey();
+                OrderGroup orderGroup = entry.getValue();
+                
+                System.out.printf("%-12.2f %-15.6f %-15.2f%n", price/1000, orderGroup.getSize()/1000, orderGroup.getTotal()/1000000);
+            }
+        }
+        
+        System.out.println("-------------------------------------------------------");
+
+        if (this.stopAsks.isEmpty() && this.stopBids.isEmpty()) {
+            System.out.println("No stop orders");
+            System.out.println("-------------------------------------------------------\n");
+            return;
+        }
+        else {
+            System.out.println("STOP ORDERS:");
+        }
+
+        if (this.stopAsks.isEmpty()) {
+            System.out.println("No stop ask orders");
+        }
+        else {
+            System.out.println("STOP ASKS:");
+            System.out.printf("%-12s %-15s%n", "Price (USD)", "Size (BTC)");
+            System.out.println("-------------------------------------------------------");
+            for (StopOrder order : this.stopAsks) {
+                System.out.printf("%-12.2f %-15.6f%n", order.getStopPrice()/1000, order.getSize()/1000);
+            }
+        }
+
+        if (this.stopBids.isEmpty()) {
+            System.out.println("No stop bid orders");
+        }
+        else {
+            System.out.println("STOP BIDS:");
+            System.out.printf("%-12s %-15s%n", "Price (USD)", "Size (BTC)");
+            System.out.println("-------------------------------------------------------");
+            for (StopOrder order : this.stopBids) {
+                System.out.printf("%-12.2f %-15.6f%n", order.getStopPrice()/1000, order.getSize()/1000);
+            }
+        }
+
+        System.out.println("-------------------------------------------------------\n");
     }
 }

@@ -14,7 +14,7 @@ public class OrderGroup {
     // price è la chiave della mappa 
 
     private int size;
-    private int total; // useful or i could calculate it when needed?
+    private int total;
 
     // limit orders list with that price
     // in the list they have to be ordered by arriving time

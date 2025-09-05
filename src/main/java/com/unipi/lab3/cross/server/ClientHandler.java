@@ -40,6 +40,9 @@ public class ClientHandler implements Runnable {
 
     private volatile boolean running;
 
+    private static final int MAX_VALUE = Integer.MAX_VALUE - 1; // (2^31)-1
+    private static final int MIN_VALUE = 1;
+
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     public ClientHandler(Socket clientSocket, UserManager userManager, OrderBook orderBook, TradeMap tradeMap, UdpNotifier udpNotifier, InactivityHandler inactivityHandler) {
@@ -267,6 +270,12 @@ public class ClientHandler implements Runnable {
                 
                 OrderValues orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
 
+                if (!isValidSize(orderVal.getSize()))
+                    return new UserResponse("insertLimitOrder", 103, "invalid order values: size exceeds limits");
+
+                if (!isValidPrice(orderVal.getPrice()))
+                    return new UserResponse("insertLimitOrder", 103, "invalid order values: price exceeds limits");
+
                 code = orderBook.execLimitOrder(this.user.getUsername(), orderVal.getType(), orderVal.getSize(), orderVal.getPrice());
 
                 if (code == -1) {
@@ -284,6 +293,12 @@ public class ClientHandler implements Runnable {
                     return new UserResponse("insertMarketOrder", 102, "you can't insert orders if not logged in");
                 
                 orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
+
+                if (!isValidSize(orderVal.getSize()))
+                    return new UserResponse("insertMarketOrder", 103, "invalid order values: size exceeds limits");
+
+                if (!isValidPrice(orderVal.getPrice()))
+                    return new UserResponse("insertMarketOrder", 103, "invalid order values: price exceeds limits");
 
                 code = orderBook.execMarketOrder(orderVal.getSize(), orderVal.getType(), "market", this.user.getUsername(), -1);
 
@@ -303,6 +318,12 @@ public class ClientHandler implements Runnable {
                     return new UserResponse("insertStopOrder", 102, "you can't insert orders if not logged in");
                 
                 orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
+
+                if (!isValidSize(orderVal.getSize()))
+                    return new UserResponse("insertStopOrders", 103, "invalid order values: size exceeds limits");
+
+                if (!isValidPrice(orderVal.getPrice()))
+                    return new UserResponse("insertStopOrders", 103, "invalid order values: price exceeds limits");
 
                 code = orderBook.addStopOrder(this.user.getUsername(), orderVal.getSize(), orderVal.getPrice(), orderVal.getType());
 
@@ -342,11 +363,9 @@ public class ClientHandler implements Runnable {
 
                 // anyone can get order book
 
-                // get order book function ...
-
-                // in msg put the order book and stop orders
+                OrderBook ob = orderBook.getOrderBook();
                 
-                response = new UserResponse("getOrderBook", code, msg);
+                response = new OrderBookResponse(ob);
             break;
 
             case "getPriceHistory":
@@ -378,8 +397,6 @@ public class ClientHandler implements Runnable {
         return response;
     }
 
-    // capire se la best practice è metterli prima o dopo run
-
     public Socket getClientSocket() {
         return this.clientSocket;
     }
@@ -404,5 +421,13 @@ public class ClientHandler implements Runnable {
             return this.user.getLogged();
         else
             return false;
+    }
+
+    public boolean isValidSize (int size) {
+        return size >= MIN_VALUE && size <= MAX_VALUE;
+    }
+
+    public boolean isValidPrice (int price) {
+        return price >= MIN_VALUE && price <= MAX_VALUE;
     }
 }

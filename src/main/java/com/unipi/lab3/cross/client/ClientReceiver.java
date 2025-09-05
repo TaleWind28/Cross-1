@@ -9,7 +9,10 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import com.unipi.lab3.cross.json.response.*;
+import com.unipi.lab3.cross.model.OrderBook;
+import com.unipi.lab3.cross.model.orders.Order;
 import com.unipi.lab3.cross.model.trade.DailyTradingStats;
+import com.unipi.lab3.cross.model.trade.PriceHistory;
 
 public class ClientReceiver implements Runnable {
 
@@ -18,6 +21,8 @@ public class ClientReceiver implements Runnable {
     private volatile boolean running;
 
     private final AtomicBoolean logged;
+
+    private Gson gson = new Gson();
 
     public ClientReceiver(BufferedReader in, AtomicBoolean logged) {
         this.in = in;
@@ -36,7 +41,6 @@ public class ClientReceiver implements Runnable {
 
                 if (obj.has("orderID")) {
                     // order response
-                    Gson gson = new Gson();
 
                     OrderResponse orderResponse = gson.fromJson(responseMsg, OrderResponse.class);
 
@@ -44,15 +48,18 @@ public class ClientReceiver implements Runnable {
                 }
                 else if (obj.has("operation") && obj.has("response") && obj.has("errorMessage")) {
                     // user response
-                    Gson gson = new Gson();
 
                     UserResponse userResponse = gson.fromJson(responseMsg, UserResponse.class);
 
                     handleResponse(userResponse);
                 }
+                else if (obj.has("orderBook")) {
+                    OrderBookResponse orderBookResponse = gson.fromJson(responseMsg, OrderBookResponse.class);
+
+                    handleResponse(orderBookResponse);
+                }
                 else if (obj.has("date") && obj.has("stats")) {
                     // history response
-                    Gson gson = new Gson();
 
                     HistoryResponse historyResponse = gson.fromJson(responseMsg, HistoryResponse.class);
 
@@ -171,14 +178,20 @@ public class ClientReceiver implements Runnable {
                 break;
             }
         }
+        else if (responseMsg instanceof OrderBookResponse) {
+            OrderBookResponse orderBookResponse = (OrderBookResponse) responseMsg;
+            OrderBook ob = orderBookResponse.getOrderBook();
+
+            ob.printOrderBook();
+        }
         else if (responseMsg instanceof HistoryResponse) {
             HistoryResponse historyResponse = (HistoryResponse) responseMsg;
 
-            System.out.println("price history " + historyResponse.getDate().getMonthValue() + "-" + historyResponse.getDate().getYear());
+            System.out.println("Price history for " + historyResponse.getDate() + ":");
 
-            for (DailyTradingStats stats : historyResponse.getStats()) {
-                System.out.println(stats.toString());
-            }
+            PriceHistory ph = new PriceHistory();
+
+            ph.printPriceHistory(historyResponse.getStats());            
         }
         else {
             System.out.println("unknown response");

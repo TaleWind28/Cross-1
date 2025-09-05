@@ -15,6 +15,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.lang.reflect.Type;
+import java.time.*;
+
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
 
 public class ServerMain {
 
@@ -24,14 +29,19 @@ public class ServerMain {
 
     public static ServerSocket serverSocket;
 
+    private static ConcurrentHashMap<String, User> users;
+
     private static UserManager userManager;
 
-    // list of all orders ...
+    private static ConcurrentSkipListMap<Integer, OrderGroup> askOrders;
+    private static ConcurrentSkipListMap<Integer, OrderGroup> bidOrders;
+    private static ConcurrentLinkedQueue<StopOrder> stopAsks;
+    private static ConcurrentLinkedQueue<StopOrder> stopBids;
 
     private static OrderBook orderBook;
 
     private static TradeMap tradeMap;
-    private static ArrayList<Trade> bufferedTrades;
+    private static LinkedList<Trade> bufferedTrades;
 
     public static ConcurrentHashMap<Socket, ClientHandler> activeClients;
 
@@ -44,28 +54,39 @@ public class ServerMain {
 
     public static PersistenceHandler persistenceHandler;
 
+    public static Gson gson = new Gson();
+
     //threadpool
     public static final ExecutorService pool = Executors.newCachedThreadPool();
 
     public static void main(String[] args) throws Exception{
         try {
+            // read config file with server properties
             getServerProperties();
 
-            // load from files into user manager, orderbook and trade map ...
+            // TCP socket
+            serverSocket = new ServerSocket(tcpPort);
 
-            userManager = new UserManager();
+            // UDP notifier
+            udpNotifier = new UdpNotifier(udpPort);
 
-            // order lists ...
-            orderBook = new OrderBook();
+            // load users, trades and orders from files
 
-            tradeMap = new TradeMap();
+            loadUsers();
 
-            bufferedTrades = new ArrayList<>();
+            userManager = new UserManager(users);
+
+            loadTrades();
+
+            loadOrderBook();
+
+            bufferedTrades = new LinkedList<>();
+
+            orderBook.setUdpNotifier(udpNotifier);
+            orderBook.setTradeMap(tradeMap);
+            orderBook.setBufferedTrades(bufferedTrades);
 
             activeClients = new ConcurrentHashMap<>();
-
-            
-            udpNotifier = new UdpNotifier(udpPort);
 
             persistenceHandler = new PersistenceHandler(orderBook, userManager, bufferedTrades);
 
@@ -82,9 +103,6 @@ public class ServerMain {
             inactivityHandler = new InactivityHandler(activeClients, userManager, orderBook);
             inactivityThread = new Thread(inactivityHandler);
             inactivityThread.start();
-
-            // TCP socket
-            serverSocket = new ServerSocket(tcpPort);
 
             Runtime.getRuntime().addShutdownHook(new Thread() {
                 public void run(){
@@ -122,16 +140,122 @@ public class ServerMain {
         }
     }
 
-    public void loadOrderBook () {
+    public static void loadUsers () {
+        File file = new File("src/main/resources/users.json");
 
+        try (FileReader fr = new FileReader(file)) {
+            Type type = new TypeToken<ConcurrentHashMap<String, User>>() {}.getType();
+
+            if (file.length() != 0) {
+                users = gson.fromJson(fr, type);
+                if (users == null)
+                    // empty json file
+                    users = new ConcurrentHashMap<>();
+            }
+            else
+                users = new ConcurrentHashMap<>();
+            
+        } catch (FileNotFoundException e) {
+            System.err.println("users file not found");
+            users = new ConcurrentHashMap<>();
+        } 
+        catch (JsonIOException e) {
+            System.err.println("error parsing users file: " + e.getMessage());
+            users = new ConcurrentHashMap<>();
+        }
+        catch (JsonSyntaxException e) {
+            System.err.println("error in users file syntax: " + e.getMessage());
+            users = new ConcurrentHashMap<>();
+        }
+        catch (IOException e) {
+            System.err.println("error reading users file: " + e.getMessage());
+            users = new ConcurrentHashMap<>();
+        }
     }
 
-    public void loadUsers () {
+    public static void loadTrades () {
+        File file = new File("src/main/resources/storicoOrdini.json");
 
+        try (FileReader fr = new FileReader(file)) {
+            if (file.length() != 0) {
+                JsonObject obj = JsonParser.parseReader(fr).getAsJsonObject();
+
+                JsonArray tradesArray = obj.getAsJsonArray("trades");
+
+                Type tradeListType = new TypeToken<LinkedList<Trade>>() {}.getType();
+
+                LinkedList<Trade> trades = gson.fromJson(tradesArray, tradeListType);
+
+                tradeMap = new TradeMap();
+
+                for (Trade trade : trades) {
+
+                    LocalDate date = Instant.ofEpochSecond(trade.getTimestamp()).atZone(ZoneId.systemDefault()).toLocalDate();
+
+                    tradeMap.addTrade(date, trade);
+                }
+            }
+            else
+                tradeMap = new TradeMap();
+        }
+        catch (FileNotFoundException e) {
+            System.err.println("trades file not found");
+            tradeMap = new TradeMap();
+        } 
+        catch (JsonIOException e) {
+            System.err.println("error parsing trades file: " + e.getMessage());
+            tradeMap = new TradeMap();
+        }
+        catch (JsonSyntaxException e) {
+            System.err.println("error in trades file syntax: " + e.getMessage());
+            tradeMap = new TradeMap();
+        }
+        catch (IOException e) {
+            System.err.println("error reading trades file: " + e.getMessage());
+            tradeMap = new TradeMap();
+        }
     }
 
-    public void loadTrades () {
+    public static void loadOrderBook () {
+        File file = new File ("src/main/resources/orderBook.json");
 
+        try (FileReader fr = new FileReader(file)) {
+            if (file.length() != 0) {
+                Type type = new TypeToken<OrderBook>() {}.getType();
+
+                orderBook = gson.fromJson(fr, type);
+
+                if (orderBook.getLimitAsks() == null)
+                    orderBook.setAskOrders(new ConcurrentSkipListMap<>());
+
+                if (orderBook.getLimitBids() == null)
+                    orderBook.setBidOrders(new ConcurrentSkipListMap<>(Comparator.reverseOrder()));
+
+                if (orderBook.getStopAsks() == null)
+                    orderBook.setStopAsks(new ConcurrentLinkedQueue<>());
+
+                if (orderBook.getStopBids() == null)
+                    orderBook.setStopBids(new ConcurrentLinkedQueue<>());
+            }
+            else
+                orderBook = new OrderBook();
+        }
+        catch (FileNotFoundException e) {
+            System.err.println("orderBook file not found");
+            orderBook = new OrderBook();
+        }
+        catch (JsonIOException e) {
+            System.err.println("error parsing order book file: " + e.getMessage());
+            orderBook = new OrderBook();
+        } 
+        catch (JsonSyntaxException e) {
+            System.err.println("error in order book file syntax: " + e.getMessage());
+            orderBook = new OrderBook();
+        }
+        catch (IOException e) {
+            System.err.println("error reading order book file: " + e.getMessage());
+            orderBook = new OrderBook();
+        }  
     }
 
     public void closeServer () {

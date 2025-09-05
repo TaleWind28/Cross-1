@@ -47,5 +47,14 @@ public class PriceHistory {
         return new DailyTradingStats(date, openPrice, closePrice, maxPrice, minPrice);
     }
 
-    
+    public void printPriceHistory (ArrayList<DailyTradingStats> history) {
+        System.out.printf("%-12s %-12s %-12s %-12s %-12s%n", "Date", "Open", "Close", "Max", "Min");
+        System.out.println("---------------------------------------------------------------");
+        for (DailyTradingStats stats : history) {
+            if (stats.getOpenPrice() == 0 && stats.getClosePrice() == 0 && stats.getMaxPrice() == 0 && stats.getMinPrice() == 0)
+                continue;
+            else
+                System.out.printf("%-12s %-12.2f %-12.2f %-12.2f %-12.2f%n", stats.getDate().toString(), stats.getOpenPrice()/1000, stats.getClosePrice()/1000, stats.getMaxPrice()/1000, stats.getMinPrice()/1000);
+        }
+    } 
 }

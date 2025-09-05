@@ -13,7 +13,7 @@ public class PersistenceHandler {
 
     private OrderBook orderBook;
     private UserManager userManager;
-    private ArrayList<Trade> bufferedTrades;
+    private LinkedList<Trade> bufferedTrades;
 
     private final String usersFile = "users.json";
     private final String ordersFile = "orders.json";
@@ -21,7 +21,7 @@ public class PersistenceHandler {
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
-    public PersistenceHandler (OrderBook orderBook, UserManager userManager, ArrayList<Trade> bufferedTrades) {
+    public PersistenceHandler (OrderBook orderBook, UserManager userManager, LinkedList<Trade> bufferedTrades) {
         this.orderBook = orderBook;
         this.userManager = userManager;
         this.bufferedTrades = bufferedTrades;
