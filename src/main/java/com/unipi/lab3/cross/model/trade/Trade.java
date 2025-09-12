@@ -1,6 +1,5 @@
 package com.unipi.lab3.cross.model.trade;
 
-import java.time.Instant.*;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;

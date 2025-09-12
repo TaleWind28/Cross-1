@@ -3,10 +3,6 @@ package com.unipi.lab3.cross.main;
 import com.unipi.lab3.cross.client.*;
 import com.unipi.lab3.cross.json.request.*;
 import com.unipi.lab3.cross.json.response.*;
-import com.unipi.lab3.cross.model.OrderBook;
-import com.unipi.lab3.cross.model.orders.Order;
-import com.unipi.lab3.cross.model.user.User;
-import com.unipi.lab3.cross.model.user.UserManager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -17,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ClientMain {
 
-    private static final String configFile = "client.properties";
+    private static final String configFile = "src/main/resources/client.properties";
 
     private static int tcpPort;
     private static String address;
@@ -36,12 +32,43 @@ public class ClientMain {
 
     private static boolean active = false;
 
-    private static String username;
+    private static final AtomicBoolean registered = new AtomicBoolean(false);
     private static final AtomicBoolean logged = new AtomicBoolean(false);
 
-    private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson gson = new GsonBuilder().create();
+
+    private static final String BANNER =
+        "\n" +
+        "============================================\n" +
+        "   CROSS: an exChange oRder bOokS Service\n" +
+        "============================================\n";
+
+    private static void printMenu() {
+    System.out.println("available commands:");
+    System.out.println("----------------------------------------");
+    System.out.printf("%-30s %s%n", "register(username,password)", "create your account");
+    System.out.printf("%-30s %s%n", "login(username,password)", "login to cross");
+    System.out.printf("%-30s %s%n", "updateCredentials(username,oldPassword,newPassword)", "update your credentials");
+    System.out.printf("%-30s %s%n", "logout()", "logout from cross");
+    System.out.printf("%-30s %s%n", "insertLimitOrder(type,size,price)", "insert an ask or bid limit order, with size and limit price");
+    System.out.printf("%-30s %s%n", "insertMarketOrder(type,size)", "insert a market order");
+    System.out.printf("%-30s %s%n", "insertStopOrder(type,size,price)", "insert an ask or bid stop order, with size and stop price");
+    System.out.printf("%-30s %s%n", "cancelOrder(orderID)", "cancel an order with given orderID");
+    System.out.printf("%-30s %s%n", "getOrderBook()", "show the order book");
+    System.out.printf("%-30s %s%n", "getPriceHistory(month,year)", "show history for given month and year");
+    System.out.printf("%-30s%n", "help()");
+    System.out.printf("%-30s%n", "exit()");
+    System.out.println("----------------------------------------\n");
+}
+
+private static void printWelcome() {
+    System.out.println(BANNER);
+    printMenu();
+}
 
     public static void main (String[] args) throws Exception {
+
+        printWelcome();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             if (active) {
@@ -60,8 +87,10 @@ public class ClientMain {
 
             scanner = new Scanner(System.in);
 
-            clientReceiver = new ClientReceiver(in, logged);
+            clientReceiver = new ClientReceiver(in, logged, registered);
+
             receiver = new Thread(clientReceiver);
+            receiver.setDaemon(true);
             receiver.start();
 
             active = true;
@@ -72,6 +101,7 @@ public class ClientMain {
 
                     if (userInput.isEmpty() || userInput.isBlank() || !isValid(userInput)) {
                         // command not valid
+                        System.out.println("invalid command");
                         continue;
                     }
 
@@ -81,24 +111,11 @@ public class ClientMain {
 
                     String param = inputStrings[1].substring(0, inputStrings[1].length() - 1).trim();
 
-                    Request request = null;
+                    Request<?> request = null;
                     
                     switch(command) {
                         case "help":
-                            // print all commands
-                            System.out.println("available commands:");
-                            System.out.println("- register(username,password)");
-                            System.out.println("- login(username,password)");
-                            System.out.println("- updateCredentials(username,oldPassword,newPassword)");
-                            System.out.println("- logout()");
-                            System.out.println("- insertLimitOrder(type, size, limitPrice)");
-                            System.out.println("- insertMarketOrder(type, size)");
-                            System.out.println("- insertStopOrder(type, size, stopPrice)");
-                            System.out.println("- cancelOrder(orderID)");
-                            System.out.println("- getOrderBook()");
-                            System.out.println("- getPriceHistory(month, year)");
-                            System.out.println("- exit()");
-                            System.out.println("- help");
+                            printMenu();
                         break;
 
                         default:
@@ -121,6 +138,29 @@ public class ClientMain {
 
                         // send on tcp socket to server
                         out.println(jsonString);
+
+                        if (command.equals("exit")) {
+                            stopThreads();
+                            close();
+
+                            try {
+                                if (receiver != null)
+                                    receiver.join(1000);
+                            }
+                            catch (InterruptedException e) {
+                                System.err.println("error waiting for receiver to close" + e.getMessage());
+                            }
+
+                            try {
+                                if (listener != null)
+                                    listener.join(1000);
+                            }
+                            catch (InterruptedException e) {
+                                System.err.println("error waiting for listener to close" + e.getMessage());
+                            }
+
+                            return;
+                        }
                     }
                 }
                 catch (NoSuchElementException e) {
@@ -139,32 +179,29 @@ public class ClientMain {
         catch (NumberFormatException e) {
             System.err.println("invalid number format:" + e.getMessage());
         }
-
-
     }
 
-    private static Request buildRequest (String operation, List<String> paramList) {
-        Request request = null;
+    private static Request<?> buildRequest (String operation, List<String> paramList) {
+        Request<?> request = null;
 
         switch (operation) {
             case "exit":
-
-                stopThreads();
-
                 request = new Request<Values>("exit", null);
-
-                close();
-
             break;
 
             case "register":
+                if (logged.get()) {
+                    System.out.println("you are already logged in");
+                    break;
+                }
+
                 // check number of params
                 if (paramList.size() != 2) {
                     System.out.println("invalid number of parameters");
                     break;
                 }
 
-                username = paramList.get(0);
+                String username = paramList.get(0);
                 String password = paramList.get(1);
 
                 // create values object
@@ -191,8 +228,9 @@ public class ClientMain {
 
                 try {
                     udpListener = new UdpListener(0);
-                    listener = new Thread(udpListener);
 
+                    listener = new Thread(udpListener);
+                    listener.setDaemon(true);
                     listener.start();
 
                     // wait for listener to start
@@ -217,7 +255,11 @@ public class ClientMain {
             break;
 
             case "updateCredentials":
-                if (logged.get()) {
+                if (!registered.get()) {
+                    System.out.println("you have to register first");
+                    break;
+                }
+                else if (logged.get()) {
                     System.out.println("you can't change credentials while logged in");
                     break;
                 }
@@ -238,7 +280,7 @@ public class ClientMain {
             break;
 
             case "logout":
-                if (username == null) {
+                if (!registered.get()) {
                     System.out.println("you have to sign in first");
                     break;
                 }
@@ -252,14 +294,12 @@ public class ClientMain {
                     break;
                 }
 
-                values = new UserValues(username);
-
-                request = new Request<UserValues>("logout", values);
+                request = new Request<UserValues>("logout", null);
             
             break;
 
             case "insertLimitOrder":
-                if (username == null || !logged.get()) {
+                if (!registered.get() || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }
@@ -300,7 +340,7 @@ public class ClientMain {
             break;
 
             case "insertMarketOrder":
-                if (username == null || !logged.get()) {
+                if (!registered.get() || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }
@@ -337,7 +377,7 @@ public class ClientMain {
             break;
 
             case "insertStopOrder":
-                if (username == null || !logged.get()) {
+                if (!registered.get() || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }    
@@ -377,7 +417,7 @@ public class ClientMain {
             break;
 
             case "cancelOrder":
-                if (username == null || !logged.get()) {
+                if (!registered.get() || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }
@@ -411,7 +451,7 @@ public class ClientMain {
             break;
 
             case "getPriceHistory":
-                if (username == null || !logged.get()) {
+                if (!registered.get() || !logged.get()) {
                     System.out.println("operation not allowed");
                     break;
                 }
@@ -434,12 +474,25 @@ public class ClientMain {
                 request = new Request<HistoryValues>("getPriceHistory", stats);
 
             break;
+
+            default:
+                System.out.println("unknown command, respect the syntax");
         }
 
         return request;
     }
 
     public static void stopThreads() {
+
+        try {
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+        }
+        catch (IOException e) {
+            System.err.println("error closing socket in stopThreads: " + e.getMessage());
+        }
+
         try {
             if (clientReceiver != null) {
                 clientReceiver.stop();
@@ -463,6 +516,7 @@ public class ClientMain {
         catch (Exception e) {
             System.err.println("error stopping UDP listener: " + e.getMessage());
         }
+
     }
 
     public static void close() {
@@ -472,23 +526,33 @@ public class ClientMain {
             if (scanner != null) {
                 scanner.close();
             }
-        } 
+        }
         catch (Exception e) {
             System.err.println("error closing scanner: " + e.getMessage());
         }
 
-        try {
-            if (in != null) 
-                in.close();
-
-            if (out != null) 
-                out.close();
-
+        /*try {
             if (socket != null && !socket.isClosed())
                 socket.close();
-        } 
+        }
         catch (IOException e) {
             System.err.println("error closing socket: " + e.getMessage());
+        }*/
+
+        try {
+            if (in != null)
+                in.close();
+        } 
+        catch (IOException e) {
+            System.err.println("error closing input stream: " + e.getMessage());
+        } 
+        
+        try {
+            if (out != null)
+                out.close();
+        } 
+        catch (Exception e) {
+            System.err.println("error closing output stream: " + e.getMessage());
         }
 
         System.out.println("client closed");
@@ -498,7 +562,7 @@ public class ClientMain {
     // check if input is valid
     // should be command(args,...) or command()
     public static boolean isValid (String input) {
-        return input.matches("^[a-zA-Z]+\\(([a-zA-Z0-9_]+(,[a-zA-Z0-9_]+)*)?\\)$");
+        return input.matches("^[a-zA-Z]+\\((\\s*[a-zA-Z0-9_]+\\s*(,\\s*[a-zA-Z0-9_]+\\s*)*)?\\)$");
     }
 
     public static void getProperties () throws FileNotFoundException, IOException {

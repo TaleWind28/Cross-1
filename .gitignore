@@ -33,6 +33,3 @@ Thumbs.db
 
 # File di log
 *.log
-
-# File di configurazione locali
-*.properties

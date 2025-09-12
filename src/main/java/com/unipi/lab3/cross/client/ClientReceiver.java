@@ -10,8 +10,6 @@ import com.google.gson.JsonParser;
 
 import com.unipi.lab3.cross.json.response.*;
 import com.unipi.lab3.cross.model.OrderBook;
-import com.unipi.lab3.cross.model.orders.Order;
-import com.unipi.lab3.cross.model.trade.DailyTradingStats;
 import com.unipi.lab3.cross.model.trade.PriceHistory;
 
 public class ClientReceiver implements Runnable {
@@ -21,12 +19,14 @@ public class ClientReceiver implements Runnable {
     private volatile boolean running = false;
 
     private final AtomicBoolean logged;
+    private final AtomicBoolean registered;
 
     private Gson gson = new Gson();
 
-    public ClientReceiver(BufferedReader in, AtomicBoolean logged) {
+    public ClientReceiver(BufferedReader in, AtomicBoolean logged, AtomicBoolean registered) {
         this.in = in;
         this.logged = logged;
+        this.registered = registered;
     }
 
     public void run() {
@@ -36,6 +36,7 @@ public class ClientReceiver implements Runnable {
             String responseMsg;
 
             while (running && ((responseMsg = in.readLine()) != null)) {
+                if (responseMsg.isBlank()) continue;
                 
                 JsonObject obj = JsonParser.parseString(responseMsg).getAsJsonObject();
 
@@ -77,7 +78,13 @@ public class ClientReceiver implements Runnable {
             }
         }
         catch (IOException e) {
-            System.err.println(e.getMessage());
+            if (running)
+                System.err.println("receiver stopped: " + e.getMessage());
+        }
+        finally {
+            running = false;
+            logged.set(false);
+            registered.set(false);
         }
     }
 
@@ -101,6 +108,7 @@ public class ClientReceiver implements Runnable {
             switch (op) {
                 case "register":
                     if (userResponse.getResponse() == 100) {
+                        registered.set(true);
                         System.out.println("registration successful");
                     }
                     else {
@@ -119,12 +127,13 @@ public class ClientReceiver implements Runnable {
 
                 case "login":
                     if (userResponse.getResponse() == 100) {
+                        registered.set(true);
                         logged.set(true);
                         System.out.println("login successful");
                     }
                     else {
-                        System.out.println(userResponse.getErrorMessage());
                         logged.set(false);
+                        System.out.println(userResponse.getErrorMessage());
                     }
                 break;
 
@@ -194,5 +203,9 @@ public class ClientReceiver implements Runnable {
 
     public void stop() {
         running = false;
+        try {
+            in.close();
+        }
+        catch (Exception e) {}
     }
 }

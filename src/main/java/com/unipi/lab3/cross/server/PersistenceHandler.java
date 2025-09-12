@@ -15,9 +15,9 @@ public class PersistenceHandler {
     private UserManager userManager;
     private LinkedList<Trade> bufferedTrades;
 
-    private final String usersFile = "users.json";
-    private final String ordersFile = "orders.json";
-    private final String tradesFile = "storicoOrdini.json";
+    private final String usersFile = "src/main/resources/users.json";
+    private final String ordersFile = "src/main/resources/orders.json";
+    private final String tradesFile = "src/main/resources/storicoOrdini.json";
 
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
@@ -28,6 +28,9 @@ public class PersistenceHandler {
     }
 
     public synchronized void saveAll () {
+        // debug
+        System.out.println("saving data");
+        
         saveUsers();
         saveOrders();
         saveTrades();
@@ -52,7 +55,8 @@ public class PersistenceHandler {
     private synchronized void saveTrades() {
         if (bufferedTrades.isEmpty()) return;
 
-        try (FileWriter writer = new FileWriter(tradesFile, true)) { // append
+        // append into file storicoOrdini.json
+        try (FileWriter writer = new FileWriter(tradesFile, true)) {
             for (Trade t : bufferedTrades) {
                 writer.write(gson.toJson(t) + "\n");
             }

@@ -15,14 +15,15 @@ public class InactivityHandler implements Runnable {
     private OrderBook orderBook;
     private UserManager userManager;
 
-    private static final long TIMEOUT = 300000; // 5 minutes
+    private final long timeout;
 
     private volatile boolean running = true;
 
-    public InactivityHandler (ConcurrentHashMap<Socket, ClientHandler> activeClients, UserManager userManager, OrderBook orderBook) {
+    public InactivityHandler (ConcurrentHashMap<Socket, ClientHandler> activeClients, UserManager userManager, OrderBook orderBook, long timeout) {
         this.activeClients = activeClients;
         this.userManager = userManager;
         this.orderBook = orderBook;
+        this.timeout = timeout;
     }
 
     public void run () {
@@ -34,7 +35,7 @@ public class InactivityHandler implements Runnable {
                     Socket socket = entry.getKey();
                     ClientHandler handler = entry.getValue();
 
-                    if (now - handler.getLastActivityTime() > TIMEOUT) {
+                    if (now - handler.getLastActivityTime() > timeout) {
                         handleTimeout(socket, handler);
                     }
                 }

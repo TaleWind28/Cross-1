@@ -1,9 +1,7 @@
 package com.unipi.lab3.cross.model.trade;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDate;
-import java.time.Year;
 import java.time.YearMonth;
 
 public class PriceHistory {

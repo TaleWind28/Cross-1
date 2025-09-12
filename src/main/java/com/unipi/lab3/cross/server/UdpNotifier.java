@@ -13,7 +13,6 @@ public class UdpNotifier {
 
     // socket udp
     private DatagramSocket socket;
-    private int serverPort; // fixed server port
 
     // map username -> address
     private ConcurrentHashMap<String, InetSocketAddress> udpClients;
@@ -21,7 +20,6 @@ public class UdpNotifier {
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     public UdpNotifier (int serverPort) throws Exception {
-        this.serverPort = serverPort;
         this.socket = new DatagramSocket(serverPort);
         this.udpClients = new ConcurrentHashMap<>();
     }

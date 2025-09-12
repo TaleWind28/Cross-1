@@ -13,10 +13,7 @@ import com.google.gson.JsonSyntaxException;
 
 import com.unipi.lab3.cross.model.*;
 import com.unipi.lab3.cross.model.user.*;
-import com.unipi.lab3.cross.model.orders.*;
 import com.unipi.lab3.cross.model.trade.*;
-import com.unipi.lab3.cross.server.*;
-import com.unipi.lab3.cross.client.*;
 import com.unipi.lab3.cross.json.request.*;
 import com.unipi.lab3.cross.json.response.*;
 import com.unipi.lab3.cross.main.ServerMain;
@@ -37,14 +34,12 @@ public class ClientHandler implements Runnable {
     private UdpNotifier udpNotifier; // shared
     private int udpPort;
 
-    private InactivityHandler inactivityHandler; // shared
-
     private volatile boolean running;
 
     private static final int MAX_VALUE = Integer.MAX_VALUE - 1; // (2^31)-1
     private static final int MIN_VALUE = 1;
 
-    private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    private final Gson gson = new GsonBuilder().create();
 
     public ClientHandler(Socket clientSocket, UserManager userManager, OrderBook orderBook, TradeMap tradeMap, UdpNotifier udpNotifier, InactivityHandler inactivityHandler) {
         this.clientSocket = clientSocket;
@@ -55,8 +50,9 @@ public class ClientHandler implements Runnable {
         this.orderBook = orderBook;
         this.tradeMap = tradeMap;
         this.udpNotifier = udpNotifier;
-        this.inactivityHandler = inactivityHandler;
         this.priceHistory = new PriceHistory();
+
+        this.lastActivityTime = System.currentTimeMillis();
     }
 
     @Override
@@ -105,15 +101,7 @@ public class ClientHandler implements Runnable {
         finally {
             running = false;
 
-            // log out user
-            if (this.user != null && this.user.getLogged()) {
-                userManager.logout(this.user.getUsername());
-                udpNotifier.removeClient(this.user.getUsername());
-
-                this.user = null;
-
-                System.out.println("user logged out due to disconnection");
-            }
+            logoutUser();
 
             try {
                 clientSocket.close();
@@ -132,18 +120,16 @@ public class ClientHandler implements Runnable {
 
             String op = obj.get("operation").getAsString();
 
-            
             int code = -1;
             String msg = "";
 
             switch (op) {
                 case "exit":
-                    if (this.user == null)
-                        return new UserResponse("exit", 101, "user error");
 
                     stop();
 
                     response = new UserResponse("exit", 100, "exited successfully");
+
                 break;
 
                 case "register":
@@ -156,6 +142,8 @@ public class ClientHandler implements Runnable {
 
                     if (code == 100) {
                         msg = "OK";
+
+                        this.user = userManager.getUser(userVal.getUsername());
 
                         System.out.println("user " + userVal.getUsername() + " registered");
                     }
@@ -175,7 +163,7 @@ public class ClientHandler implements Runnable {
                 case "updateCredentials":
                     userVal = gson.fromJson(obj.get("values"), UserValues.class);
 
-                    if (this.user.getLogged())
+                    if (this.user != null && this.user.getLogged())
                         return new UserResponse("updateCredentials", 104, "user currently logged");
 
                     if (userManager.getUser(userVal.getUsername()) == null)
@@ -185,6 +173,9 @@ public class ClientHandler implements Runnable {
 
                     if (code == 100) {
                         msg = "OK";
+
+                        if (this.user == null)
+                            this.user = userManager.getUser(userVal.getUsername());
 
                         System.out.println("user " + userVal.getUsername() + " updated credentials");
                     }
@@ -204,7 +195,7 @@ public class ClientHandler implements Runnable {
                 case "login":
                     userVal = gson.fromJson(obj.get("values"), UserValues.class);
 
-                    if (this.user.getLogged())
+                    if (this.user != null && this.user.getLogged())
                         return new UserResponse("login", 102, "user already logged in");
 
                     if (userManager.getUser(userVal.getUsername()) == null)
@@ -222,13 +213,17 @@ public class ClientHandler implements Runnable {
                         udpPort = userVal.getNetworkValues().getPort();
                         udpNotifier.registerClient(userVal.getUsername(), clientSocket.getInetAddress(), udpPort);
 
-                        // set client handler user
-                        this.user = userManager.getUser(userVal.getUsername());
-                        this.user.setLogged(true);
+                        if (this.user == null) {
+                            this.user = userManager.getUser(userVal.getUsername());
+                            this.user.setLogged(true);
+                        }
+                        else {
+                            this.user.setLogged(true);
+                        }
 
                         updateLastActivityTime();
 
-                        System.out.println("user " + this.user.getUsername() + " logged in");
+                        System.out.println("user " + userVal.getUsername() + " logged in");
                     }  
                     else if (code == 101)
                         msg = "password mismatch";
@@ -248,11 +243,6 @@ public class ClientHandler implements Runnable {
                     if (this.user.getLogged() == false)
                         return new UserResponse("logout", 101, "user not logged in");
 
-                    userVal = gson.fromJson(obj.get("values"), UserValues.class);
-
-                    if (userManager.getUser(userVal.getUsername()) == null)
-                        return new UserResponse("logout", 101, "user not found");
-
                     code = userManager.logout(this.user.getUsername());
 
                     if (code == 100) {
@@ -260,8 +250,8 @@ public class ClientHandler implements Runnable {
 
                         // unregister client from udp notifications
                         udpNotifier.removeClient(this.user.getUsername());
+                        
                         this.user.setLogged(false);
-                        this.user = null;
 
                         System.out.println("user logged out");
                     }
@@ -329,10 +319,10 @@ public class ClientHandler implements Runnable {
                     orderVal = gson.fromJson(obj.get("values"), OrderValues.class);
 
                     if (!isValidSize(orderVal.getSize()))
-                        return new UserResponse("insertStopOrders", 103, "invalid order values: size exceeds limits");
+                        return new UserResponse("insertStopOrder", 103, "invalid order values: size exceeds limits");
 
                     if (!isValidPrice(orderVal.getPrice()))
-                        return new UserResponse("insertStopOrders", 103, "invalid order values: price exceeds limits");
+                        return new UserResponse("insertStopOrder", 103, "invalid order values: price exceeds limits");
 
                     code = orderBook.addStopOrder(this.user.getUsername(), orderVal.getSize(), orderVal.getPrice(), orderVal.getType());
 
@@ -419,6 +409,10 @@ public class ClientHandler implements Runnable {
         return this.clientSocket;
     }
 
+    public User getUser() {
+        return this.user;
+    }
+
     public String getUsername() {
         if (this.user != null)
             return this.user.getUsername();
@@ -449,27 +443,29 @@ public class ClientHandler implements Runnable {
         return price >= MIN_VALUE && price <= MAX_VALUE;
     }
 
-    public void stop() {
-        running = false;
-
-        // log out user if logged in
+    public void logoutUser () {
         if (this.user != null && this.user.getLogged()) {
             try {
                 userManager.logout(this.user.getUsername());
-                udpNotifier.removeClient(this.user.getUsername());
-
-                ServerMain.removeActiveClient(clientSocket);
-
                 this.user.setLogged(false);
+
+                udpNotifier.removeClient(this.user.getUsername());
             }
             catch (Exception e) {
                 System.err.println("error logging out user: " + e.getMessage());
             }
+        }
+    }
 
-            this.user = null;
+    public void stop() {
+        running = false;
 
+        if (this.user != null && this.user.getLogged()) {
+            logoutUser();
             System.out.println("user logged out");
         }
+
+        ServerMain.removeActiveClient(clientSocket);
 
         try {
             if (clientSocket != null && !clientSocket.isClosed()) {
@@ -479,5 +475,7 @@ public class ClientHandler implements Runnable {
         catch (IOException e) {
             System.err.println("error closing client socket: " + e.getMessage());
         }
+
+        System.out.println("client closed");
     }
 }

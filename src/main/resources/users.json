@@ -1,1 +1,27 @@
-{}
+{
+  "lori": {
+    "username": "lori",
+    "passwordHash": "e814093dcdf516df701bb6954762385211a33e19376d2e939facae8b7187c3c1",
+    "isLogged": false
+  },
+  "sara": {
+    "username": "sara",
+    "passwordHash": "65f2652019c9077052354dd02fc3a8aaa5dfff2415553f985d9456ea60be73ab",
+    "isLogged": false
+  },
+  "mario": {
+    "username": "mario",
+    "passwordHash": "7f6cacabdb60364752f6009aae132c034a41d07ed813d30fa40c21bf81f482ba",
+    "isLogged": false
+  },
+  "costi": {
+    "username": "costi",
+    "passwordHash": "6f654e11a4288f8caeaab93c64a19b7fb689d040433d78ab0effe06618a789ab",
+    "isLogged": false
+  },
+  "lorenzo": {
+    "username": "lorenzo",
+    "passwordHash": "35b70fed6bef4d00fcedfd9d21ffb6bebbd8977645740986467b9585b6376047",
+    "isLogged": true
+  }
+}

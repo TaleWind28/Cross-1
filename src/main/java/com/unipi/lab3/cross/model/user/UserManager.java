@@ -1,6 +1,5 @@
 package com.unipi.lab3.cross.model.user;
 
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -19,7 +18,7 @@ public class UserManager {
         this.users = users;
     }
 
-    public Map<String, User> getUsers () {
+    public ConcurrentHashMap<String, User> getUsers () {
         return this.users;
     }
 
@@ -114,7 +113,7 @@ public class UserManager {
     }  
     
     // password hashed
-    private String hashPassword(String password) {
+    public String hashPassword(String password) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
 

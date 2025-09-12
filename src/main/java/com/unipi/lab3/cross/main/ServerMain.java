@@ -1,7 +1,6 @@
 package com.unipi.lab3.cross.main;
 
 import com.unipi.lab3.cross.model.*;
-import com.unipi.lab3.cross.model.orders.*;
 import com.unipi.lab3.cross.model.trade.*;
 import com.unipi.lab3.cross.model.user.*;
 import com.unipi.lab3.cross.server.*;
@@ -24,7 +23,7 @@ import com.google.gson.reflect.TypeToken;
 
 public class ServerMain {
 
-    public static final String configFile = "server.properties";
+    public static final String configFile = "src/main/resources/server.properties";
     public static int tcpPort;
     public static int udpPort;
 
@@ -33,11 +32,6 @@ public class ServerMain {
     private static ConcurrentHashMap<String, User> users;
 
     private static UserManager userManager;
-
-    private static ConcurrentSkipListMap<Integer, OrderGroup> askOrders;
-    private static ConcurrentSkipListMap<Integer, OrderGroup> bidOrders;
-    private static ConcurrentLinkedQueue<StopOrder> stopAsks;
-    private static ConcurrentLinkedQueue<StopOrder> stopBids;
 
     private static OrderBook orderBook;
 
@@ -63,20 +57,27 @@ public class ServerMain {
 
     public static void main(String[] args) throws Exception{
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            public void run(){
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
                 System.out.println("server shutting down...");
-                closeServer();
             }
-        });
+            catch (Exception e) {}                
+
+            closeServer();
+        }));
 
         // read config file with server properties
         getServerProperties();
+
+        System.out.println("server configuration loaded!");
 
         try {
 
             // TCP socket
             serverSocket = new ServerSocket(tcpPort);
+
+            System.out.println("server started on port " + tcpPort);
+            System.out.println("waiting for connections...");
 
             // UDP notifier
             udpNotifier = new UdpNotifier(udpPort);
@@ -84,6 +85,12 @@ public class ServerMain {
             // load users, trades and orders from files
 
             loadUsers();
+
+            // print users
+            System.out.println("loaded users:");
+            for (Map.Entry<String, User> entry : users.entrySet()) {
+                System.out.println("username: " + entry.getKey() + ", " + entry.getValue());
+            }
 
             userManager = new UserManager(users);
 
@@ -108,10 +115,10 @@ public class ServerMain {
                 } catch (Exception e) {
                     System.err.println("Error during persistence: " + e.getMessage());
                 }
-            }, 1,1, java.util.concurrent.TimeUnit.MINUTES);
+            }, 1, 1, java.util.concurrent.TimeUnit.MINUTES);
 
             // inactivity handler thread
-            inactivityHandler = new InactivityHandler(activeClients, userManager, orderBook);
+            inactivityHandler = new InactivityHandler(activeClients, userManager, orderBook, inactivityTimeout);
             inactivityThread = new Thread(inactivityHandler);
             inactivityThread.start();
 
@@ -125,8 +132,9 @@ public class ServerMain {
 
                     addActiveClient(clientSocket, handler);
 
-                    pool.execute(handler);
+                    System.out.println("new client connected: " + clientSocket.getInetAddress() + ":" + clientSocket.getPort());
 
+                    pool.execute(handler);
                 }
                 catch (SocketException se) {
                     break;
