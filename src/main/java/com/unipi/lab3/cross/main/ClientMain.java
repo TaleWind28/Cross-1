@@ -1,17 +1,19 @@
 package com.unipi.lab3.cross.main;
 
 import com.unipi.lab3.cross.client.*;
-import com.unipi.lab3.cross.json.request.*;
-import com.unipi.lab3.cross.json.response.*;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ClientMain {
+
+
+    //coda per stdin
+    public static LinkedBlockingQueue<String> userCli = new LinkedBlockingQueue<String>();
 
     private static final String configFile = "src/main/resources/client.properties";
 
@@ -98,7 +100,7 @@ public class ClientMain {
             //scanner per leggere da stdin
             scanner = new Scanner(System.in);
             //task da passare al thread di ricezione
-            clientReceiver = new ClientReceiver(in, logged, registered, serverClosed);
+            clientReceiver = new ClientReceiver(in, logged, registered, serverClosed,userCli);
             //thread di ricezione
             receiver = new Thread(clientReceiver);
             receiver.start();
@@ -107,10 +109,11 @@ public class ClientMain {
             //thread ricezione udp
             listener = new Thread(udpListener);
             //task sender TCP
-            clientSender = new ClientSender(out, scanner, active, logged, registered, udpListener, listener);
+            clientSender = new ClientSender(out, userCli, active, logged, registered, udpListener, listener);
             //thread sender TCP
             sender = new Thread(clientSender);
             sender.start();
+            //server thread per leggere da stdin, quello diventa demone
 
             active.set(true);
 
@@ -156,31 +159,6 @@ public class ClientMain {
     public static void shutdown() {
         stopThreads();
         close();
-    
-
-        // try {
-        //     if (receiver != null)
-        //         receiver.join(1000);
-        // }
-        // catch (InterruptedException e) {
-        //     System.err.println("error waiting for receiver to close" + e.getMessage());
-        // }
-
-        // try {
-        //     if (sender != null)
-        //         sender.join(1000);
-        // }
-        // catch (InterruptedException e) {
-        //     System.err.println("error waiting for sender to close" + e.getMessage());
-        // }
-
-        // try {
-        //     if (listener != null)
-        //         listener.join(1000);
-        // }
-        // catch (InterruptedException e) {
-        //     System.err.println("error waiting for listener to close" + e.getMessage());
-        // }
     }
 
     public static void stopThreads() {

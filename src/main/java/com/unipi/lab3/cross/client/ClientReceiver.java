@@ -2,6 +2,7 @@ package com.unipi.lab3.cross.client;
 
 import java.io.*;
 import java.net.*;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.google.gson.Gson;
@@ -23,13 +24,16 @@ public class ClientReceiver implements Runnable {
 
     private final AtomicBoolean serverClosed;
 
+    private LinkedBlockingQueue<String> userInput;
+
     private Gson gson = new Gson();
 
-    public ClientReceiver (BufferedReader in, AtomicBoolean logged, AtomicBoolean registered, AtomicBoolean serverClosed) {
+    public ClientReceiver (BufferedReader in, AtomicBoolean logged, AtomicBoolean registered, AtomicBoolean serverClosed,LinkedBlockingQueue<String> userInput) {
         this.in = in;
         this.logged = logged;
         this.registered = registered;
         this.serverClosed = serverClosed;
+        this.userInput = userInput;
     }
 
     public void run() {
