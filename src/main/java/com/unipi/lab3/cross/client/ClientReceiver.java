@@ -21,7 +21,7 @@ public class ClientReceiver implements Runnable {
 
     private final AtomicBoolean logged;
     private final AtomicBoolean registered;
-
+    private String SHUTDOWN_WARNING = "__SHUTDOWN__";
     private final AtomicBoolean serverClosed;
 
     private LinkedBlockingQueue<String> userInput;
@@ -71,6 +71,13 @@ public class ClientReceiver implements Runnable {
                     System.out.println("connection closed");
                     running = false;
                     serverClosed.set(true);
+
+                    try {
+                        userInput.put(SHUTDOWN_WARNING);
+                    } catch (Exception e) {
+                        System.out.println("Eccecion");
+                    }
+                    
                     break;
                 }
                 
