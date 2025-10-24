@@ -27,15 +27,18 @@ public class ClientMain {
     private static Thread receiver;
     private static ClientReceiver clientReceiver;
 
+    private static Thread sender;
+    private static ClientSender clientSender;
+
     private static Thread listener;
     private static UdpListener udpListener;
 
-    private static boolean active = false;
+    private static final AtomicBoolean active = new AtomicBoolean(false);
 
     private static final AtomicBoolean registered = new AtomicBoolean(false);
     private static final AtomicBoolean logged = new AtomicBoolean(false);
 
-    private static final Gson gson = new GsonBuilder().create();
+    private static final AtomicBoolean serverClosed = new AtomicBoolean(false);
 
     private static final String BANNER =
         "\n" +
@@ -43,37 +46,43 @@ public class ClientMain {
         "   CROSS: an exChange oRder bOokS Service\n" +
         "============================================\n";
 
-    private static void printMenu() {
-    System.out.println("available commands:");
-    System.out.println("----------------------------------------");
-    System.out.printf("%-30s %s%n", "register(username,password)", "create your account");
-    System.out.printf("%-30s %s%n", "login(username,password)", "login to cross");
-    System.out.printf("%-30s %s%n", "updateCredentials(username,oldPassword,newPassword)", "update your credentials");
-    System.out.printf("%-30s %s%n", "logout()", "logout from cross");
-    System.out.printf("%-30s %s%n", "insertLimitOrder(type,size,price)", "insert an ask or bid limit order, with size and limit price");
-    System.out.printf("%-30s %s%n", "insertMarketOrder(type,size)", "insert a market order");
-    System.out.printf("%-30s %s%n", "insertStopOrder(type,size,price)", "insert an ask or bid stop order, with size and stop price");
-    System.out.printf("%-30s %s%n", "cancelOrder(orderID)", "cancel an order with given orderID");
-    System.out.printf("%-30s %s%n", "getOrderBook()", "show the order book");
-    System.out.printf("%-30s %s%n", "getPriceHistory(month,year)", "show history for given month and year");
-    System.out.printf("%-30s%n", "help()");
-    System.out.printf("%-30s%n", "exit()");
-    System.out.println("----------------------------------------\n");
-}
+    private static void printWelcome() {
 
-private static void printWelcome() {
-    System.out.println(BANNER);
-    printMenu();
-}
+        System.out.println(BANNER);
+
+        System.out.println("available commands:");
+        System.out.println("----------------------------------------");
+        System.out.printf("%-30s %s%n", "register(username,password)", "create your account");
+        System.out.printf("%-30s %s%n", "login(username,password)", "login to cross");
+        System.out.printf("%-30s %s%n", "updateCredentials(username,oldPassword,newPassword)", "update your credentials");
+        System.out.printf("%-30s %s%n", "logout()", "logout from cross");
+        System.out.printf("%-30s %s%n", "insertLimitOrder(type,size,price)", "insert an ask or bid limit order, with size and limit price");
+        System.out.printf("%-30s %s%n", "insertMarketOrder(type,size)", "insert a market order");
+        System.out.printf("%-30s %s%n", "insertStopOrder(type,size,price)", "insert an ask or bid stop order, with size and stop price");
+        System.out.printf("%-30s %s%n", "cancelOrder(orderID)", "cancel an order with given orderID");
+        System.out.printf("%-30s %s%n", "getOrderBook()", "show the order book");
+        System.out.printf("%-30s %s%n", "getPriceHistory(month,year)", "show history for given month and year");
+        System.out.printf("%-30s%n", "help()");
+        System.out.printf("%-30s%n", "exit()");
+        System.out.println("----------------------------------------\n");
+    }
 
     public static void main (String[] args) throws Exception {
 
         printWelcome();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            if (active) {
-                close();
+            if (active.get()) {
+
+                active.set(false);;
+
+                if (logged.get()) {
+                    logged.set(false);
+                }
+
                 System.out.println("client shutting down");
+
+                shutdown();
             }
         }));
 
@@ -81,417 +90,100 @@ private static void printWelcome() {
 
         try {
             socket = new Socket(address, tcpPort);
+            socket.setSoTimeout(1000);
 
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             out = new PrintWriter(socket.getOutputStream(), true);
 
             scanner = new Scanner(System.in);
 
-            clientReceiver = new ClientReceiver(in, logged, registered);
+            clientReceiver = new ClientReceiver(in, logged, registered, serverClosed);
 
             receiver = new Thread(clientReceiver);
-            receiver.setDaemon(true);
             receiver.start();
 
-            active = true;
+            udpListener = new UdpListener(0);
+            listener = new Thread(udpListener);
 
-            while (active) {
-                try {
-                    String userInput = scanner.nextLine();
+            clientSender = new ClientSender(out, scanner, active, logged, registered, udpListener, listener);
 
-                    if (userInput.isEmpty() || userInput.isBlank() || !isValid(userInput)) {
-                        // command not valid
-                        System.out.println("invalid command");
-                        continue;
-                    }
+            sender = new Thread(clientSender);
+            sender.start();
 
-                    String[] inputStrings = userInput.split("\\(", 2);
+            active.set(true);
 
-                    String command = inputStrings[0].trim();
+            while (active.get() && !serverClosed.get()) {
+                try  {
 
-                    String param = inputStrings[1].substring(0, inputStrings[1].length() - 1).trim();
-
-                    Request<?> request = null;
-                    
-                    switch(command) {
-                        case "help":
-                            printMenu();
-                        break;
-
-                        default:
-                            List<String> params = new ArrayList<>();
-
-                            if (!param.isEmpty()) {
-                                String[] tokens = param.split("\\s*,\\s*");
-                                params = Arrays.asList(tokens);
-                            }
-
-                            request = buildRequest(command, params);
-
+                    if (!active.get()) {
+                        System.out.println("closing...");
                         break;
                     }
 
-                    if (request != null) {
-                        // convert to json message with gson builder
+                    if (serverClosed.get()) {
+                        System.out.println("connection closed by server");
+                        active.set(false);
                         
-                        String jsonString = gson.toJson(request);
-
-                        // send on tcp socket to server
-                        out.println(jsonString);
-
-                        if (command.equals("exit")) {
-                            stopThreads();
-                            close();
-
-                            try {
-                                if (receiver != null)
-                                    receiver.join(1000);
-                            }
-                            catch (InterruptedException e) {
-                                System.err.println("error waiting for receiver to close" + e.getMessage());
-                            }
-
-                            try {
-                                if (listener != null)
-                                    listener.join(1000);
-                            }
-                            catch (InterruptedException e) {
-                                System.err.println("error waiting for listener to close" + e.getMessage());
-                            }
-
-                            return;
+                        if (logged.get()) {
+                            logged.set(false);
                         }
-                    }
-                }
-                catch (NoSuchElementException e) {
-                    // scanner closed
-                    active = false;
-                }   
-                catch (Exception e) {
 
+                    }
+                    
                 }
+                catch (Exception e) {
+                    System.err.println("error: " + e.getMessage());
+                }
+                
             }
+
+            if (logged.get()) {
+                logged.set(false);
+            }
+            shutdown();
+            System.exit(0);
         }
         catch (IOException e) {
             System.err.println("network error:" + e.getMessage());
-            active = false;
         }
         catch (NumberFormatException e) {
             System.err.println("invalid number format:" + e.getMessage());
         }
     }
 
-    private static Request<?> buildRequest (String operation, List<String> paramList) {
-        Request<?> request = null;
-
-        switch (operation) {
-            case "exit":
-                request = new Request<Values>("exit", null);
-            break;
-
-            case "register":
-                if (logged.get()) {
-                    System.out.println("you are already logged in");
-                    break;
-                }
-
-                // check number of params
-                if (paramList.size() != 2) {
-                    System.out.println("invalid number of parameters");
-                    break;
-                }
-
-                String username = paramList.get(0);
-                String password = paramList.get(1);
-
-                // create values object
-                UserValues values = new UserValues(username, password);
-
-                // create request object
-                request = new Request<UserValues>("register", values);  
-
-            break;
-
-            case "login":
-                if (logged.get()) {
-                    System.out.println("you are already logged in");
-                    break;
-                }
-
-                if (paramList.size() != 2) {
-                    System.out.println("invalid number of parameters, insert username and password");
-                    break;
-                }
-
-                username = paramList.get(0);
-                password = paramList.get(1);
-
-                try {
-                    udpListener = new UdpListener(0);
-
-                    listener = new Thread(udpListener);
-                    listener.setDaemon(true);
-                    listener.start();
-
-                    // wait for listener to start
-                    int sleepTime = 500;
-                    Thread.sleep(sleepTime);
-
-                    int udpPort = udpListener.getPort();
-
-                    NetworkValues netValues = new NetworkValues(udpPort);
-
-                    values = new UserValues(username, password, netValues);
-
-                    request = new Request<UserValues>("login", values);
-                }
-                catch (InterruptedException e) {
-                    System.err.println("error waiting for udp listener to start" + e.getMessage());
-                }
-                catch (Exception e) {
-                    System.err.println("error starting udp listener" + e.getMessage());
-                }
-
-            break;
-
-            case "updateCredentials":
-                if (!registered.get()) {
-                    System.out.println("you have to register first");
-                    break;
-                }
-                else if (logged.get()) {
-                    System.out.println("you can't change credentials while logged in");
-                    break;
-                }
-
-                if (paramList.size() != 3) {
-                    System.out.println("invalid number of parameters, insert username, oldPassword and newPassword");
-                    break;
-                }
-
-                username = paramList.get(0);
-                String oldPassword = paramList.get(1);
-                String newPassword = paramList.get(2);
-
-                values = new UserValues(username, oldPassword, newPassword);
-
-                request = new Request<UserValues>("updateCredentials", values);
-
-            break;
-
-            case "logout":
-                if (!registered.get()) {
-                    System.out.println("you have to sign in first");
-                    break;
-                }
-                else if (!logged.get()) {
-                    System.out.println("you are not logged in");
-                    break;
-                }
-
-                if (!paramList.isEmpty()) {
-                    System.out.println("invalid command");
-                    break;
-                }
-
-                request = new Request<UserValues>("logout", null);
-            
-            break;
-
-            case "insertLimitOrder":
-                if (!registered.get() || !logged.get()) {
-                    System.out.println("operation not allowed");
-                    break;
-                }
-
-                if (paramList.size() != 3) {
-                    System.out.println("invalid number of parameters, insert type, size and limitPrice");
-                    break;
-                }
-
-                String type = paramList.get(0);
-
-                if (!type.equals("ask") && !type.equals("bid")) {
-                    System.out.println("type must be ask or bid");
-                    break;
-                }
-
-                int size = 0;
-                int limitPrice = 0;
-
-                try {
-                    size = Integer.parseInt(paramList.get(1));
-                    limitPrice = Integer.parseInt(paramList.get(2));
-                }
-                catch (NumberFormatException e) {
-                    System.out.println("invalid number format");
-                    break;
-                }
-
-                if (size <= 0 || limitPrice <= 0) {
-                    System.out.println("invalid parameters");
-                    break;
-                }
-
-                OrderValues orderVal = new OrderValues(type, size, limitPrice);
-
-                request = new Request<OrderValues>("insertLimitOrder", orderVal);
-
-            break;
-
-            case "insertMarketOrder":
-                if (!registered.get() || !logged.get()) {
-                    System.out.println("operation not allowed");
-                    break;
-                }
-
-                if (paramList.size() != 2) {
-                    System.out.println("invalid number of parameters for market order, insert type and size");
-                    break;
-                }
-
-                type = paramList.get(0);
-
-                if (!type.equals("ask") && !type.equals("bid")) {
-                    System.out.println("type must be ask or bid");
-                    break;
-                }
-
-                try {
-                    size = Integer.parseInt(paramList.get(1));
-                }
-                catch (NumberFormatException e) {
-                    System.out.println("invalid number format");
-                    break;
-                }
-
-                if (size <= 0) {
-                    System.out.println("invalid order parameters");
-                    break;
-                }
-
-                orderVal = new OrderValues(type, size, 0);
-
-                request = new Request<OrderValues>("insertMarketOrder", orderVal);
-
-            break;
-
-            case "insertStopOrder":
-                if (!registered.get() || !logged.get()) {
-                    System.out.println("operation not allowed");
-                    break;
-                }    
-            
-                if (paramList.size() != 3) {
-                    System.out.println("invalid number of parameters for stop order, insert type, size and stopPrice");
-                    break;
-                }
-
-                type = paramList.get(0);
-
-                if (!type.equals("ask") && !type.equals("bid")) {
-                    System.out.println("type must be ask or bid");
-                    break;
-                }
-
-                int stopPrice = 0;
-
-                try {
-                    size = Integer.parseInt(paramList.get(1));
-                    stopPrice = Integer.parseInt(paramList.get(2));
-                }
-                catch (NumberFormatException e) {
-                    System.out.println("invalid number format");
-                    break;
-                }
-
-                if (size <= 0 || stopPrice <= 0) {
-                    System.out.println("invalid order parameters");
-                    break;
-                }
-
-                orderVal = new OrderValues(type, size, stopPrice);
-
-                request = new Request<OrderValues>("insertStopOrder", orderVal);            
-
-            break;
-
-            case "cancelOrder":
-                if (!registered.get() || !logged.get()) {
-                    System.out.println("operation not allowed");
-                    break;
-                }
-
-                if (paramList.size() != 1) {
-                    System.out.println("invalid number of parameters, insert orderID");
-                    break;
-                }
-
-                int orderID = Integer.parseInt(paramList.get(0));
-
-                if (orderID <= 0) {
-                    System.out.println("invalid orderID");
-                    break;
-                }
-
-                OrderResponse ID = new OrderResponse(orderID);
-
-                request = new Request<OrderResponse>("cancelOrder", ID);
-
-            break;
-
-            case "getOrderBook":
-                if (!paramList.isEmpty()) {
-                    System.out.println("invalid command");
-                    break;
-                }
-
-                request = new Request<Values>("getOrderBook", null);
-
-            break;
-
-            case "getPriceHistory":
-                if (!registered.get() || !logged.get()) {
-                    System.out.println("operation not allowed");
-                    break;
-                }
-                
-                if (paramList.size() != 2) {
-                    System.out.println("invalid number of parameters, insert month and year");
-                    break;
-                }
-
-                int month = Integer.parseInt(paramList.get(0));
-                int year = Integer.parseInt(paramList.get(1));
-
-                if (month < 1 || month > 12 || year < 2000) {
-                    System.out.println("invalid year and month parameters");
-                    break;
-                }
-
-                HistoryValues stats = new HistoryValues(month, year);
-
-                request = new Request<HistoryValues>("getPriceHistory", stats);
-
-            break;
-
-            default:
-                System.out.println("unknown command, respect the syntax");
-        }
-
-        return request;
+    public static void shutdown() {
+        stopThreads();
+        close();
+    
+
+        // try {
+        //     if (receiver != null)
+        //         receiver.join(1000);
+        // }
+        // catch (InterruptedException e) {
+        //     System.err.println("error waiting for receiver to close" + e.getMessage());
+        // }
+
+        // try {
+        //     if (sender != null)
+        //         sender.join(1000);
+        // }
+        // catch (InterruptedException e) {
+        //     System.err.println("error waiting for sender to close" + e.getMessage());
+        // }
+
+        // try {
+        //     if (listener != null)
+        //         listener.join(1000);
+        // }
+        // catch (InterruptedException e) {
+        //     System.err.println("error waiting for listener to close" + e.getMessage());
+        // }
     }
 
     public static void stopThreads() {
 
-        try {
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
-        }
-        catch (IOException e) {
-            System.err.println("error closing socket in stopThreads: " + e.getMessage());
-        }
+        System.out.println("stopping threads");
 
         try {
             if (clientReceiver != null) {
@@ -506,6 +198,22 @@ private static void printWelcome() {
         }
 
         try {
+            if(scanner != null) {
+                System.out.println("closing scanner");
+                clientSender.stop();
+                scanner.close();
+            }
+
+            if (sender != null && sender.isAlive()) {
+                System.out.println("stopping sender");
+                sender.interrupt();
+            }
+        }
+        catch (Exception e) {
+            System.err.println("error stopping sender: " + e.getMessage());
+        }
+
+        try {
             if (udpListener != null) {
                 udpListener.stop();
             }
@@ -516,14 +224,16 @@ private static void printWelcome() {
         catch (Exception e) {
             System.err.println("error stopping UDP listener: " + e.getMessage());
         }
-
     }
 
     public static void close() {
-        active = false;
+
+        System.out.println("closing resources");
 
         try {
             if (scanner != null) {
+                System.out.println("closing scanner");
+                scanner.nextLine(); // to unblock any waiting input
                 scanner.close();
             }
         }
@@ -531,38 +241,38 @@ private static void printWelcome() {
             System.err.println("error closing scanner: " + e.getMessage());
         }
 
-        /*try {
-            if (socket != null && !socket.isClosed())
+        try {
+            if (socket != null && !socket.isClosed()){
+                System.out.println("closing scanner");
                 socket.close();
+            }
         }
         catch (IOException e) {
             System.err.println("error closing socket: " + e.getMessage());
-        }*/
+        }
 
         try {
-            if (in != null)
+            if (in != null){
+                System.out.println("closing scanner");
                 in.close();
+            }
         } 
         catch (IOException e) {
             System.err.println("error closing input stream: " + e.getMessage());
         } 
         
         try {
-            if (out != null)
+            if (out != null){
+                System.out.println("closing scanner");
                 out.close();
+            }
+
         } 
         catch (Exception e) {
             System.err.println("error closing output stream: " + e.getMessage());
         }
 
         System.out.println("client closed");
-    }
-
-
-    // check if input is valid
-    // should be command(args,...) or command()
-    public static boolean isValid (String input) {
-        return input.matches("^[a-zA-Z]+\\((\\s*[a-zA-Z0-9_]+\\s*(,\\s*[a-zA-Z0-9_]+\\s*)*)?\\)$");
     }
 
     public static void getProperties () throws FileNotFoundException, IOException {

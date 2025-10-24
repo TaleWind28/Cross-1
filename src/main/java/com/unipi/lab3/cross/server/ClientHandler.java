@@ -82,6 +82,13 @@ public class ClientHandler implements Runnable {
 
                             // send response to client
                             out.println(jsonString);
+
+                            if (response instanceof UserResponse) {
+                                if (((UserResponse)response).getOperation().equals("exit")) {
+                                    stop();
+                                    break;
+                                }
+                            }
                         }  
                     }
                     catch (JsonSyntaxException e) {
@@ -94,6 +101,7 @@ public class ClientHandler implements Runnable {
                     }
 
                 }
+                out.println(gson.toJson((new UserResponse("exit", 100, "exited successfully"))));
         } 
         catch (IOException e) {
             System.err.println("socket error: " + e.getMessage());
@@ -125,11 +133,7 @@ public class ClientHandler implements Runnable {
 
             switch (op) {
                 case "exit":
-
-                    stop();
-
                     response = new UserResponse("exit", 100, "exited successfully");
-
                 break;
 
                 case "register":
@@ -296,9 +300,6 @@ public class ClientHandler implements Runnable {
                     if (!isValidSize(orderVal.getSize()))
                         return new UserResponse("insertMarketOrder", 103, "invalid order values: size exceeds limits");
 
-                    if (!isValidPrice(orderVal.getPrice()))
-                        return new UserResponse("insertMarketOrder", 103, "invalid order values: price exceeds limits");
-
                     code = orderBook.execMarketOrder(orderVal.getSize(), orderVal.getType(), "market", this.user.getUsername(), -1);
 
                     if (code == -1) {
@@ -341,7 +342,7 @@ public class ClientHandler implements Runnable {
                     if (this.user.getLogged() == false)
                         return new UserResponse("cancelOrder", 102, "you can't cancel orders if not logged in");
 
-                    int orderID = obj.get("orderID").getAsInt();
+                    int orderID = gson.fromJson(obj.get("values"), OrderResponse.class).getOrderID();
 
                     code = orderBook.cancelOrder(orderID, this.user.getUsername());
 

@@ -63,7 +63,7 @@ public class ServerMain {
             }
             catch (Exception e) {}                
 
-            closeServer();
+            shutdown();
         }));
 
         // read config file with server properties
@@ -229,7 +229,7 @@ public class ServerMain {
     }
 
     public static void loadOrderBook () {
-        File file = new File ("src/main/resources/orderBook.json");
+        File file = new File ("src/main/resources/orders.json");
 
         try (FileReader fr = new FileReader(file)) {
             if (file.length() != 0) {
@@ -248,6 +248,8 @@ public class ServerMain {
 
                 if (orderBook.getStopBids() == null)
                     orderBook.setStopBids(new ConcurrentLinkedQueue<>());
+
+                orderBook.restoreId();
             }
             else
                 orderBook = new OrderBook();
@@ -278,7 +280,7 @@ public class ServerMain {
         activeClients.remove(socket);
     }
 
-    public static void closeServer() {
+    public static void shutdown() {
 
         // save all data before closing
         try {

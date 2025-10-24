@@ -21,21 +21,55 @@ public class ClientReceiver implements Runnable {
     private final AtomicBoolean logged;
     private final AtomicBoolean registered;
 
+    private final AtomicBoolean serverClosed;
+
     private Gson gson = new Gson();
 
-    public ClientReceiver(BufferedReader in, AtomicBoolean logged, AtomicBoolean registered) {
+    public ClientReceiver (BufferedReader in, AtomicBoolean logged, AtomicBoolean registered, AtomicBoolean serverClosed) {
         this.in = in;
         this.logged = logged;
         this.registered = registered;
+        this.serverClosed = serverClosed;
     }
 
     public void run() {
         running = true;
 
         try {
-            String responseMsg;
+            String responseMsg = null;
 
-            while (running && ((responseMsg = in.readLine()) != null)) {
+            while (running && !Thread.currentThread().isInterrupted()) {
+
+                try {
+                    responseMsg = in.readLine();
+                }
+                catch (SocketTimeoutException e) {
+                    continue;
+                }
+                catch (SocketException e) {
+                    if (running) {
+                        System.err.println("socket error: " + e.getMessage());
+                        serverClosed.set(true);
+                        running = false;
+                    }
+                    break;
+                }
+                catch (IOException e) {
+                    if (running) {
+                        System.err.println("receiver stopped: " + e.getMessage());
+                        serverClosed.set(true);
+                        running = false;
+                    }
+                    break;
+                }
+
+                if (responseMsg == null) {
+                    System.out.println("connection closed");
+                    running = false;
+                    serverClosed.set(true);
+                    break;
+                }
+                
                 if (responseMsg.isBlank()) continue;
                 
                 JsonObject obj = JsonParser.parseString(responseMsg).getAsJsonObject();
@@ -66,25 +100,17 @@ public class ClientReceiver implements Runnable {
 
                     handleResponse(historyResponse);
                 }
-                else {  
+                else {
                     // unknown response
                     System.out.println("unknown response from server" + responseMsg);
                 }
             }
         }
-        catch (SocketException e) {
-            if (running) {
-                System.err.println("socket error: " + e.getMessage());
-            }
-        }
-        catch (IOException e) {
-            if (running)
-                System.err.println("receiver stopped: " + e.getMessage());
-        }
         finally {
             running = false;
             logged.set(false);
             registered.set(false);
+            serverClosed.set(true);
         }
     }
 
@@ -165,15 +191,16 @@ public class ClientReceiver implements Runnable {
                     }
                 break;
 
-                case "getOrderBook":
-                    // print order book and stop orders
-
-
-                break;
-
-                case "getPriceHistory":
-                    
-
+                case "exit":
+                    if (userResponse.getResponse() == 100) {
+                        System.out.println("disconnecting...");
+                        serverClosed.set(true);
+                        running = false;
+                        System.exit(0);
+                    }
+                    else {
+                        System.out.println(userResponse.getErrorMessage());
+                    }
                 break;
 
                 default:
@@ -203,6 +230,8 @@ public class ClientReceiver implements Runnable {
 
     public void stop() {
         running = false;
+        serverClosed.set(true);
+
         try {
             in.close();
         }

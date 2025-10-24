@@ -34,12 +34,15 @@ public class OrderBook {
     private transient int bestAskPrice;
     private transient int bestBidPrice;
 
-    private transient static final AtomicInteger idCounter = new AtomicInteger(100);
+    private transient static final AtomicInteger idCounter = new AtomicInteger(0);
+    private int lastId = 0;
 
     private transient TradeMap tradeMap;
     private transient LinkedList<Trade> bufferedTrades;
 
     private transient UdpNotifier udpNotifier;
+
+    private transient boolean update = false;
 
     public OrderBook () {
         this.askOrders = new ConcurrentSkipListMap<>();
@@ -119,10 +122,27 @@ public class OrderBook {
         return this.bestBidPrice;
     }
 
-    public int counterOrderId () {
-        return idCounter.getAndIncrement();
+    public int getLastId () {
+        return this.lastId;
     }
 
+    public void setLastId (int lastId) {
+        this.lastId = lastId;
+    }
+
+    public int counterOrderId () {
+        int newId = idCounter.getAndIncrement();
+        // update last used id
+        this.lastId = newId;
+        return newId;
+    }
+
+    public void restoreId () {
+        if (this.lastId >= idCounter.get()) {
+            idCounter.set(this.lastId + 1);
+        }
+    }
+ 
     public int getAsksSize () {
         int totalSize = 0;
 
@@ -155,26 +175,35 @@ public class OrderBook {
         return availableSize;
     }
  
-    private synchronized void updateBestPrices () {
-        int oldAsk = this.bestAskPrice;
-        int oldBid = this.bestBidPrice;
-        
+    private synchronized void updateBestPrices () {       
         // update best prices only if the maps aren't empty
         this.bestAskPrice = this.askOrders.isEmpty() ? 0 : this.askOrders.firstKey();
         this.bestBidPrice = this.bidOrders.isEmpty() ? 0 : this.bidOrders.firstKey();
 
         // both best prices must be valid to have spread
         if (this.bestAskPrice > 0 && this.bestBidPrice > 0) {
-            this.spread = this.bestAskPrice - this.bestBidPrice;
+            if (this.bestAskPrice < this.bestBidPrice) {
+                // negative spread
+                this.spread = -1;
+            }
+            else {
+                this.spread = this.bestAskPrice - this.bestBidPrice;
+            }
         } 
         else {
             // if one of the prices is 0, spread is invalid
             this.spread = -1;
         }
 
-        // execute stop orders if the map changed
-        if (oldAsk != this.bestAskPrice || oldBid != this.bestBidPrice) {
-            execStopOrders();
+        // execute stop orders if the map changed, avoiding recursion
+        if (!update) {
+            update = true;
+            try {
+                execStopOrders();
+            }
+            finally {
+                update = false;
+            }
         }
     }
 
@@ -277,7 +306,7 @@ public class OrderBook {
                 // order partially executed
                 System.out.println("order " + orderId + " partially executed");
             }
-            addLimitOrder(orderId, "ask", username, newSize, price);
+            addLimitOrder(orderId, username, "ask", newSize, price);
         }
 
         return orderId;
@@ -338,7 +367,7 @@ public class OrderBook {
                 System.out.println("order " + orderId + " partially executed");
             }
 
-            addLimitOrder(orderId, "bid", username, newSize, price);
+            addLimitOrder(orderId, username, "bid", newSize, price);
         }
 
         return orderId;
@@ -428,6 +457,9 @@ public class OrderBook {
 
         // update best prices + spread
         updateBestPrices();
+
+        // debug
+        printOrderBook();
     }
 
     // method to add a stop order
@@ -438,12 +470,35 @@ public class OrderBook {
         // create a new StopOrder object
         StopOrder order = new StopOrder(orderId, username, type, size, price);
 
-        ConcurrentLinkedQueue<StopOrder> selectedQueue = type.equals("ask") ? this.stopAsks : this.stopBids;
 
-        // add the stop order to the stop orders queue
-        selectedQueue.add(order);
+        if ((type.equals("ask") && !this.bidOrders.isEmpty() && this.bestBidPrice <= price) || 
+            (type.equals("bid") && !this.askOrders.isEmpty() && this.bestAskPrice >= price)) {
+            // stop order is immediately executable
+            execStopOrder(size, price, type, "stop", username, orderId);
+        }
+        else {
+            // add the stop order to the stop orders queue
+            ConcurrentLinkedQueue<StopOrder> selectedQueue = type.equals("ask") ? this.stopAsks : this.stopBids;
+            selectedQueue.add(order);
+        }
+
+        // debug
+        printOrderBook();
 
         return orderId;
+    }
+
+    public synchronized void execStopOrder (int size, int price, String type, String orderType, String username, int orderId) {
+        int result = execMarketOrder (size, type, "stop", username, orderId);
+
+        if (result == orderId) {
+            System.out.println("stop order " + orderId + " executed");
+
+            insertTrade(orderId, type, "stop", size, price, LocalDate.now(), username);
+        }
+        else {
+            System.out.println("error! stop order " + orderId + " not executed");
+        }
     }
 
     // periodic check to match stop orders, executed when spread and best prices change
@@ -562,18 +617,21 @@ public class OrderBook {
 
             updateBestPrices();
 
-            System.out.println("market order " + orderId + " fully executed");
+            if (orderType.equals("market")) {
+                System.out.println("market order " + orderId + " fully executed");
 
-            // when fully executed, add to trade map
-            if (type.equals("ask"))
-                insertTrade(orderId, "ask", "market", size, 0, LocalDate.now(), username); 
-            else
-                insertTrade(orderId, "bid", "market", size, 0, LocalDate.now(), username);
+                // when fully executed, add to trade map
+                if (type.equals("ask"))
+                    insertTrade(orderId, "ask", "market", size, 0, LocalDate.now(), username); 
+                else
+                    insertTrade(orderId, "bid", "market", size, 0, LocalDate.now(), username);
+            }
 
             return orderId;
         }
-     
-        System.out.println("market order " + orderId + " failed");
+
+        if (orderType.equals("market"))
+            System.out.println("market order " + orderId + " failed");
 
         // failed order
         return -1;
@@ -701,7 +759,7 @@ public class OrderBook {
                 int price = entry.getKey();
                 OrderGroup orderGroup = entry.getValue();
                 
-                System.out.printf("%-12.2f %-15.6f %-15.2f%n", price/1000, orderGroup.getSize()/1000, orderGroup.getTotal()/1000000);
+                System.out.printf("%10d %10d %10d%n", price/1000, orderGroup.getSize()/1000, orderGroup.getTotal()/1000000);
             }
         }
             
@@ -724,7 +782,7 @@ public class OrderBook {
                 int price = entry.getKey();
                 OrderGroup orderGroup = entry.getValue();
                 
-                System.out.printf("%-12.2f %-15.6f %-15.2f%n", price/1000, orderGroup.getSize()/1000, orderGroup.getTotal()/1000000);
+                System.out.printf("%10d %10d %10d%n", price/1000, orderGroup.getSize()/1000, orderGroup.getTotal()/1000000);
             }
         }
         
@@ -747,7 +805,7 @@ public class OrderBook {
             System.out.printf("%-12s %-15s%n", "Price (USD)", "Size (BTC)");
             System.out.println("-------------------------------------------------------");
             for (StopOrder order : this.stopAsks) {
-                System.out.printf("%-12.2f %-15.6f%n", order.getStopPrice()/1000, order.getSize()/1000);
+                System.out.printf("%10d %10d%n", order.getStopPrice()/1000, order.getSize()/1000);
             }
         }
 
@@ -759,7 +817,7 @@ public class OrderBook {
             System.out.printf("%-12s %-15s%n", "Price (USD)", "Size (BTC)");
             System.out.println("-------------------------------------------------------");
             for (StopOrder order : this.stopBids) {
-                System.out.printf("%-12.2f %-15.6f%n", order.getStopPrice()/1000, order.getSize()/1000);
+                System.out.printf("%10d %10d%n", order.getStopPrice()/1000, order.getSize()/1000);
             }
         }
 

@@ -14,14 +14,14 @@ public class OrderGroup {
     // price è la chiave della mappa 
 
     private int size;
-    private int total;
+    private long total;
 
     // limit orders list with that price
     // in the list they have to be ordered by arriving time
     
     private ConcurrentLinkedQueue<LimitOrder> limitOrders = new ConcurrentLinkedQueue<>();
 
-    public OrderGroup (int size, int total, ConcurrentLinkedQueue<LimitOrder> limitOrders) {
+    public OrderGroup (int size, long total, ConcurrentLinkedQueue<LimitOrder> limitOrders) {
         this.size = size;
         this.total = total;
         this.limitOrders = limitOrders;
@@ -37,7 +37,7 @@ public class OrderGroup {
         return this.size;
     }
 
-    public int getTotal () {
+    public long getTotal () {
         return this.total;
     }
 
@@ -49,7 +49,7 @@ public class OrderGroup {
         this.size = size;
     }
 
-    public void setTotal (int total) {
+    public void setTotal (long total) {
         this.total = total;
     }
 
@@ -59,7 +59,7 @@ public class OrderGroup {
 
     public synchronized void updateGroup (int filledSize, int limitPrice) {
         this.size -= filledSize;
-        this.total = limitPrice * this.size;
+        this.total = (long) limitPrice * this.size;
     }
 
     public int getFilteredSize (String excludedUsername) {
@@ -84,7 +84,7 @@ public class OrderGroup {
         this.size += order.getSize();
 
         // update total of the group
-        int newTotal = order.getLimitPrice() * this.size;
+        long newTotal = (long) order.getLimitPrice() * this.size;
         this.total = newTotal;
     }
 
@@ -106,7 +106,7 @@ public class OrderGroup {
                 this.size -= order.getSize();
 
                 // recalculate the total with the new size value
-                int newTotal = order.getLimitPrice() * this.size;
+                long newTotal = (long) order.getLimitPrice() * this.size;
                 setTotal(newTotal);
 
                 return true;

@@ -5,6 +5,10 @@ import java.io.*;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
+
 import com.unipi.lab3.cross.model.OrderBook;
 import com.unipi.lab3.cross.model.user.UserManager;
 import com.unipi.lab3.cross.model.trade.Trade;
@@ -52,17 +56,52 @@ public class PersistenceHandler {
         }
     }
 
-    private synchronized void saveTrades() {
+    private synchronized void saveTrades () {
         if (bufferedTrades.isEmpty()) return;
 
-        // append into file storicoOrdini.json
-        try (FileWriter writer = new FileWriter(tradesFile, true)) {
-            for (Trade t : bufferedTrades) {
-                writer.write(gson.toJson(t) + "\n");
+        File file = new File(tradesFile);
+
+        try {
+            JsonObject obj = null;
+
+            if (file.exists() && file.length() != 0) {
+                try (FileReader reader = new FileReader(file)) {
+
+                    obj = gson.fromJson(reader, JsonObject.class);
+                }
+                catch (JsonSyntaxException e) {
+                    System.err.println("malformed json: " + e.getMessage());
+                    obj = new JsonObject();
+                    obj.add("trades", new JsonArray());
+                }
+                catch (IOException e) {
+                    System.err.println("error reading trades: " + e.getMessage());
+                    obj = new JsonObject();
+                    obj.add("trades", new JsonArray());
+                }
             }
+            else {
+                obj = new JsonObject();
+                obj.add("trades", new JsonArray());
+            }
+
+            JsonArray trades = obj.getAsJsonArray("trades");
+
+            for (Trade t : bufferedTrades) {
+                trades.add(gson.toJsonTree(t));
+            }
+
+            try (FileWriter writer = new FileWriter(file)) {
+                gson.toJson(obj, writer);
+            }
+            catch (IOException e) {
+                System.err.println("error re-saving trades: " + e.getMessage());
+            }
+
             bufferedTrades.clear();
-        } catch (IOException e) {
-            System.err.println("error saving trades: " + e.getMessage());
+        }
+        catch (Exception e) {
+            System.err.println("trades error: " + e.getMessage());
         }
     }
 }
