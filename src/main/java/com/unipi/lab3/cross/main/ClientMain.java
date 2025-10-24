@@ -114,7 +114,23 @@ public class ClientMain {
             sender = new Thread(clientSender);
             sender.start();
             //server thread per leggere da stdin, quello diventa demone
-
+            Thread t = new Thread(() -> {
+                while(true){
+                    if(scanner.hasNext()){
+                        //bloccante
+                        String line = scanner.nextLine();
+                        try {
+                            userCli.put(line);
+                        } catch (InterruptedException e) {
+                            System.out.println("interrotto");
+                        }
+                    }
+                }
+            }   
+            );
+            t.setDaemon(true);
+            t.start();
+            
             active.set(true);
 
             while (active.get() && !serverClosed.get()) {
