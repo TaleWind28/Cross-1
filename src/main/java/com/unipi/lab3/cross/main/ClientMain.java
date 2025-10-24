@@ -89,24 +89,26 @@ public class ClientMain {
         getProperties();
 
         try {
+            //creo il socket
             socket = new Socket(address, tcpPort);
             socket.setSoTimeout(1000);
-
+            //
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             out = new PrintWriter(socket.getOutputStream(), true);
-
+            //scanner per leggere da stdin
             scanner = new Scanner(System.in);
-
+            //task da passare al thread di ricezione
             clientReceiver = new ClientReceiver(in, logged, registered, serverClosed);
-
+            //thread di ricezione
             receiver = new Thread(clientReceiver);
             receiver.start();
-
+            //task ricezione udp
             udpListener = new UdpListener(0);
+            //thread ricezione udp
             listener = new Thread(udpListener);
-
+            //task sender TCP
             clientSender = new ClientSender(out, scanner, active, logged, registered, udpListener, listener);
-
+            //thread sender TCP
             sender = new Thread(clientSender);
             sender.start();
 

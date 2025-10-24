@@ -48,7 +48,7 @@ public class ClientSender implements Runnable {
         this.listener = listener;
     }
 
-    public void run() {
+    public void run(){
         running = true;
 
         try {
@@ -458,12 +458,17 @@ public class ClientSender implements Runnable {
 
     public void stop() {
         running = false;
+        System.out.println("stoppo");
 
         try {
+            System.out.println("Ammazzo Scanner");
             if (scanner != null) {
                 scanner.close();
             }
+            System.out.println("Scanner Ammazzato");
         }
-        catch (Exception e) {}
+        catch (Exception e) {
+            System.out.println("Errore: "+e);
+        }
     }
 }
