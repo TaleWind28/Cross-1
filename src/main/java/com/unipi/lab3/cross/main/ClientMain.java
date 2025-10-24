@@ -130,7 +130,7 @@ public class ClientMain {
             );
             t.setDaemon(true);
             t.start();
-            
+
             active.set(true);
 
             while (active.get() && !serverClosed.get()) {
@@ -194,11 +194,11 @@ public class ClientMain {
         }
 
         try {
-            if(scanner != null) {
-                System.out.println("closing scanner");
-                clientSender.stop();
-                scanner.close();
-            }
+            // if(scanner != null) {
+            //     System.out.println("closing scanner");
+            //     clientSender.stop();
+            //     scanner.close();
+            // }
 
             if (sender != null && sender.isAlive()) {
                 System.out.println("stopping sender");
@@ -227,19 +227,8 @@ public class ClientMain {
         System.out.println("closing resources");
 
         try {
-            if (scanner != null) {
-                System.out.println("closing scanner");
-                scanner.nextLine(); // to unblock any waiting input
-                scanner.close();
-            }
-        }
-        catch (Exception e) {
-            System.err.println("error closing scanner: " + e.getMessage());
-        }
-
-        try {
             if (socket != null && !socket.isClosed()){
-                System.out.println("closing scanner");
+                System.out.println("closing socket");
                 socket.close();
             }
         }
